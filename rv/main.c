@@ -1,0 +1,7 @@
+int hello() {
+    return 2;
+}
+
+int main() {
+    return 1 + hello();
+}
