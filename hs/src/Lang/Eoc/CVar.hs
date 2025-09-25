@@ -1,6 +1,10 @@
 module Lang.Eoc.CVar where
 
 import Control.Exception (throw)
+import Control.Monad.State (modify, execState)
+
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 import Lang.Eoc.Types (Var, PrimOp(..), MyException(..))
 import Lang.Eoc.RVar
@@ -42,6 +46,10 @@ data CVar
   = CProgram CVarInfo [(Label, Tail)]
   deriving (Show)
 
+data CType
+  = CTyInt
+  deriving (Show)
+
 -- pass: explicate-control
 
 catm :: Exp -> CAtm
@@ -72,3 +80,12 @@ example6 = Let "a" (Let "b" (Int_ 42) (Var "b")) (Prim PrimPlus [Int_ 3, Var "a"
 example7 = Let "y" (Let "x" (Int_ 20)
                     (Prim PrimPlus [Var "x", Let "x" (Int_ 22) (Var "x")]))
            (Var "y")
+
+typeCheckCVar :: CVar -> Map Var CType
+typeCheckCVar (CProgram _ [(_, tail)]) = execState (tyck tail) Map.empty
+  where
+    tyck (Seq (Assign v e) tail) = do
+      put v CTyInt
+      tyck tail
+    tyck (Return e) = return ()
+    put v ty = modify $ \m -> Map.insert v ty m

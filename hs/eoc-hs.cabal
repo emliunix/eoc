@@ -19,7 +19,7 @@ library eoc
     import:           warnings
     default-language: GHC2024
     hs-source-dirs:   src
-    other-modules:    Lang.Eoc.RVar
+    exposed-modules:  Lang.Eoc.RVar
                     , Lang.Eoc.CVar
                     , Lang.Eoc.Asm
                     , Lang.Eoc.Free
@@ -27,8 +27,9 @@ library eoc
     build-depends:    base
                     , transformers
                     , mtl
+                    , containers
 
-test-suite eoc-hs-test
+test-suite eoc-test
     import:           warnings
     default-language: GHC2024
     -- other-modules:
@@ -40,3 +41,4 @@ test-suite eoc-hs-test
                     , hspec
                     , bytestring
                     , text
+                    , eoc-hs:eoc
