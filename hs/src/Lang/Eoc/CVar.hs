@@ -44,7 +44,10 @@ type Label = String
 
 data CVar
   = CProgram CVarInfo [(Label, Tail)]
-  deriving (Show)
+
+instance Show CVar where
+  show (CProgram _ tails) =
+    unlines $ map (\(lbl, tail) -> lbl ++ ":\n" ++ show tail) tails
 
 data CType
   = CTyInt

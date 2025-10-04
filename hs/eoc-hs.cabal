@@ -22,23 +22,39 @@ library eoc
     exposed-modules:  Lang.Eoc.RVar
                     , Lang.Eoc.CVar
                     , Lang.Eoc.Asm
+                    , Lang.Eoc.Sexp
+                    , Lang.Eoc.Parser
+                    , Lang.Eoc.R
+                    , Lang.Eoc.R.Types
+                    , Lang.Eoc.R.Uniquify
+                    , Lang.Eoc.R.Shrink
+                    , Lang.Eoc.R.UncoverGet
+                    , Lang.Eoc.R.Rco
+                    , Lang.Eoc.Typecheck
+                    , Lang.Eoc.C
+                    , Lang.Eoc.C.Types
+                    , Lang.Eoc.C.ExplicateControl
                     , Lang.Eoc.Free
                     , Lang.Eoc.Types
     build-depends:    base
                     , transformers
                     , mtl
+                    , trifecta
                     , containers
 
 test-suite eoc-test
     import:           warnings
     default-language: GHC2024
-    -- other-modules:
+    other-modules:    Test2
+                    , SexpTest
     -- other-extensions:
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs
+    other-modules:    Test2
     build-depends:    base ^>=4.21.0.0
                     , hspec
                     , bytestring
                     , text
+                    , trifecta
                     , eoc-hs:eoc

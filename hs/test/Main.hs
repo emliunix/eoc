@@ -4,6 +4,9 @@ import Test.Hspec
 
 import Control.Monad ( (>=>) )
 
+import SexpTest (sexpTestSpec)
+import Test2 (mySpec2)
+
 import Lang.Eoc.Types
 import Lang.Eoc.RVar
 import Lang.Eoc.CVar
@@ -18,14 +21,20 @@ compile exp = do
   putStrLn $ "Lowered program:\n" ++ show lowered
   let cprog = explicateControl lowered
   putStrLn $ "C program:\n" ++ show cprog
-  let asm = assignHomes . selectInstructions $ cprog
-  putStrLn $ "Output assembly:\n" ++ show asm
+  let asm0 = selectInstructions cprog
+  putStrLn $ "Output ASM_var:\n" ++ show asm0
+  let asm1 = assignHomes asm0
+  putStrLn $ "Output ASM_homed:\n" ++ show asm1
+  let asm = patchInstructions asm1
+  putStrLn $ "Output ASM_patched:\n" ++ show asm
   putStrLn "---- Compilation finished"
   return asm
 
 main :: IO ()
 main = hspec $ do
+  sexpTestSpec
   mySpec
+  mySpec2
   describe "Sample Test" $ do
     it "should pass this test" $ do
       (1 + 1) `shouldBe` (2 :: Int)
@@ -35,5 +44,6 @@ testExample1 = Prim PrimPlus [Let "x" (Let "y" (Int_ 1) (Prim PrimNeg [Var "y"])
 
 mySpec :: Spec
 mySpec = describe "My Spec" $ do
+  res <- runIO $ compile testExample1
   it "should run test passes" $ do
-    compile testExample1 `shouldThrow` const @_ @MyException True
+    res `shouldSatisfy` const True
