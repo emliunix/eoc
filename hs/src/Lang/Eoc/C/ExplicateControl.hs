@@ -6,7 +6,8 @@ The explicate-control pass.
 
 I found this part hard to understand. So I created some mental models to help understanding.
 
-**Base Case**: it has to be clear we have already compiled expr with rco so basically a expr is either:
+__Base Case__: it has to be clear we have already compiled expr with rco so basically a expr is either:
+
 * a simple expr: an atm or a prim op call taking atms
 * a complex: either a Let binding or a If statement
 
@@ -16,6 +17,7 @@ We only need to focus on the right hand side of let, and the condition position 
 It's not to match 2 levels deep. The cases are recursively matched, so it handles arbitrary dpeth of nesting.
 
 The book suggested we create auxiliary functions:
+
 * explicate-tail
 * explicate-assign
 * explicate-pred
@@ -32,10 +34,15 @@ This pass visually reorganizes these structures but the ordering is strictly pre
 
 = freshBlock
 
-We pass blocks as @CPass Tail@ for the purpose of lazy evaluation,
-these are created by `lazyBlock` which will not `createBlock` until evaluation
+We pass blocks as @CPass Tail@ for the purpose of lazy evaluation.
 
-The label is the key to identify created blocks. With Haskell Monad, we can defer execution block creation, but we still have to call `freshBlock` at the creations site (where `explicatePred` is called) to key the execution, so `freshBlock` cannot be wrapped inside `explicatePred`.
+The label is the key to identify created blocks. With Haskell Monad, we can defer block creation, and label manipulation is a compuation, so you have ensted Monads.
+
+First, `block` creates the label immediately, but the computation of tail is not executed, instead, it's wrapped with `gotoBlock` and `createBlock`. When the block is actually needed, the previously label is used to check if the block is already created, and create if it is not.
+
+Because evaluate the block may in term call `block` internally. So care should be taken to avoid duplicate evaluation. Otherwise, you have multiple labels and duplicated generated blocks.
+
+This is guaranteed by `createBlock` which won't call the computation if the block is already created.
 
 -}
 module Lang.Eoc.C.ExplicateControl where
