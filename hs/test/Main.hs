@@ -5,7 +5,7 @@ import Test.Hspec
 import Control.Monad ( (>=>) )
 
 import SexpTest (sexpTestSpec)
-import Test2 (mySpec2)
+import Test2 (mySpec2, mySpec3)
 
 import Lang.Eoc.Types
 import Lang.Eoc.RVar
@@ -35,6 +35,7 @@ main = hspec $ do
   sexpTestSpec
   mySpec
   mySpec2
+  mySpec3
   describe "Sample Test" $ do
     it "should pass this test" $ do
       (1 + 1) `shouldBe` (2 :: Int)
