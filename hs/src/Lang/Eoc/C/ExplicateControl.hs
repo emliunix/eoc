@@ -1,9 +1,8 @@
-module Lang.Eoc.C.ExplicateControl where
 {-|
-We pass blocks as @CPass Tail@ for the purpose of lazy evaluation,
-these are created by `lazyBlock` which will not `createBlock` until evaluation
 
-## mental model
+The explicate-control pass.
+
+= mental model
 
 I found this part hard to understand. So I created some mental models to help understanding.
 
@@ -31,13 +30,18 @@ Assignments and conditional jumping are special in CPU instructions, or say, hav
 
 This pass visually reorganizes these structures but the ordering is strictly preserved.
 
-## freshBlock
+= freshBlock
+
+We pass blocks as @CPass Tail@ for the purpose of lazy evaluation,
+these are created by `lazyBlock` which will not `createBlock` until evaluation
 
 The label is the key to identify created blocks. With Haskell Monad, we can defer execution block creation, but we still have to call `freshBlock` at the creations site (where `explicatePred` is called) to key the execution, so `freshBlock` cannot be wrapped inside `explicatePred`.
 
 -}
+module Lang.Eoc.C.ExplicateControl where
 
 import Control.Exception (throw)
+import Control.Monad (join)
 import Control.Monad.Trans (lift)
 
 import Data.Map (Map)
@@ -61,14 +65,17 @@ cexpr e = CAtm $ catm e
 freshBlock' :: CPass Label
 freshBlock' = lift freshBlock
 
+block :: CPass Tail -> CPass (CPass Tail)
+block tail = do
+  lbl <- lift freshBlock
+  return $ gotoBlock lbl tail
+
 explicateTail :: Exp -> CPass Tail
 explicateTail (Let var exp body) = explicateAssign var exp $ explicateTail body
-explicateTail (If cond thn els) = do
-  lT <- freshBlock'
-  lE <- freshBlock'
-  explicatePred cond
-    (explicateTail thn >>= lazyBlock lT)
-    (explicateTail els >>= lazyBlock lE)
+explicateTail (If cond thn els) =
+  join $ explicatePred cond
+    <$> block (explicateTail thn)
+    <*> block (explicateTail els)
 explicateTail expr = return $ Return $ cexpr expr
 
 explicateAssign :: Var -> Exp -> CPass Tail -> CPass Tail
@@ -77,13 +84,10 @@ explicateAssign var e cont =
     Let var' e' body ->
       explicateAssign var' e' $ explicateAssign var body cont
     If cond thn els -> do
-      lblCont <- freshBlock'
-      lT <- freshBlock'
-      lE <- freshBlock'
-      let cont' = cont >>= lazyBlock lblCont
-          thn' = explicateAssign var thn cont' >>= lazyBlock lT
-          els' = explicateAssign var els cont' >>= lazyBlock lE
-      explicatePred cond thn' els'
+      cont' <- block cont
+      join $ explicatePred cond
+        <$> block (explicateAssign var thn cont')
+        <*> block (explicateAssign var els cont')
     _ -> Seq (Assign var (cexpr e)) <$> cont
 
 explicatePred :: Exp -> CPass Tail -> CPass Tail -> CPass Tail
@@ -91,17 +95,15 @@ explicatePred cond thn els =
   case cond of
     (Bool_ b) -> if b then thn else els
     (Var v) -> explicatePred (Prim PrimEq [Var v, Bool_ True]) thn els
-    (Prim op [a, b]) -> do
+    (Prim op [a, b]) ->
       IfStmt op (catm a) (catm b)
         <$> thn
         <*> els
-    (If cond' thn' els') -> do
-      lT <- freshBlock'
-      lE <- freshBlock'
-      explicatePred cond'
-        (explicatePred thn' thn els >>= lazyBlock lT)
-        (explicatePred els' thn els >>= lazyBlock lE)
-    (Let var exp body) -> do
+    (If cond' thn' els') ->
+      join $ explicatePred cond'
+        <$> block (explicatePred thn' thn els)
+        <*> block (explicatePred els' thn els)
+    (Let var exp body) ->
       explicateAssign var exp $ explicatePred body thn els
     _ -> throw $ MyException $ "invalid if condition: " ++ show cond
 

@@ -51,6 +51,7 @@ mySpec3 = describe "Test explicate-control" $ runIO $ do
   testExample example
   testExample example2
   testExample example3
+  testExample example4
   where
     passes = InitialPass ("uniquify", uniquify)
       :> ("shrink", shrink)
@@ -74,4 +75,13 @@ mySpec3 = describe "Test explicate-control" $ runIO $ do
     \& (if (and (== (read) 0) (== (read) 1))
     \&   0
     \&   42)
+    \&"""
+    example4 = parseRfromString' """
+    \& (let ([y (if #t
+    \&             (read)
+    \&             (if (== (read) 0)
+    \&               777
+    \&               (let ([x (read)])
+    \&                 (+ 1 x))))])
+    \&     (+ y 2))
     \&"""

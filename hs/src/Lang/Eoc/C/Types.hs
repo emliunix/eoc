@@ -72,19 +72,21 @@ instance MonadTrans CPassT where
 runCPass :: Monad m => CPassT m a -> m (a, CPassState)
 runCPass (CPassT m) = runStateT m (CPassState Map.empty)
 
-createBlock :: Monad m => Label -> Tail -> CPassT m ()
+createBlock :: Monad m => Label -> CPassT m Tail -> CPassT m Tail
 createBlock lbl tail = do
   blk <- gets (Map.lookup lbl . blocks)
   case blk of
-    Just _ -> return ()
+    Just blk -> return blk
     Nothing -> do
+      tail <- tail
       modify $ \s -> s { blocks = Map.insert lbl tail (blocks s) }
-      return ()
+      return tail
 
-lazyBlock :: Monad m => Label -> Tail -> CPassT m Tail
-lazyBlock _ g@(Goto _) = return g
-lazyBlock lbl tail = do
-  createBlock lbl tail
-  return $ Goto lbl
+gotoBlock :: Monad m => Label -> CPassT m Tail -> CPassT m Tail
+gotoBlock lbl tail = do
+  tail <- createBlock lbl tail
+  case tail of
+    g@(Goto _) -> return g
+    _ -> return $ Goto lbl
 
 type CPass a = CPassT PassM a
