@@ -51,7 +51,6 @@ import Control.Exception (throw)
 import Control.Monad (join)
 import Control.Monad.Trans (lift)
 
-import Data.Foldable (foldrM)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -62,7 +61,7 @@ import Lang.Eoc.C.Types
 catm :: Exp -> CAtm
 catm (Int_ i) = CInt i
 catm (Bool_ b) = CBool b
-catm Unit_ = CVar "unit"  -- represent unit as a variable named "unit"
+catm Unit_ = CUnit
 catm (Var var) = CVar var
 catm (GetBang var) = CVar var
 catm a = throw $ MyException $ "expected an atom, got " ++ show a
@@ -86,8 +85,8 @@ explicateTail (If cond thn els) =
   join $ explicatePred cond
     <$> block (explicateTail thn)
     <*> block (explicateTail els)
-explicateTail (Begin exps body) = explicateEffects exps (explicateTail body)
-explicateTail w@(While cond body) = explicateEffect w (explicateTail Unit_)
+explicateTail (Begin exps body) = explicateEffects exps $ explicateTail body
+explicateTail w@(While _ _) = explicateEffect w (explicateTail Unit_)
 explicateTail expr = return $ Return $ cexpr expr
 
 explicateAssign :: Var -> Exp -> CPass Tail -> CPass Tail
@@ -101,9 +100,8 @@ explicateAssign var e cont =
         <$> block (explicateAssign var thn cont')
         <*> block (explicateAssign var els cont')
     Begin exps body -> explicateEffects exps (explicateAssign var body cont)
-    (SetBang var' e') ->
-      explicateAssign var' e' $ explicateAssign var Unit_ cont
-    w@(While _ _) -> explicateEffect w $ explicateAssign var Unit_ cont
+    (SetBang var' e') -> explicateAssign var' e' cont
+    w@(While _ _) -> explicateEffect w cont
     _ -> Seq (Assign var (cexpr e)) <$> cont
 
 explicatePred :: Exp -> CPass Tail -> CPass Tail -> CPass Tail
@@ -145,7 +143,7 @@ explicateEffect expr cont =
       join $ explicatePred cond
         <$> block (explicateEffect thn cont')
         <*> block (explicateEffect els cont')
-    (Begin exps body) -> explicateEffects (exps ++ [body]) cont
+    (Begin exps body) -> explicateEffects exps $ explicateEffect body cont
     (While cond body) -> do
       loopLbl <- freshBlock'
       cont' <- block cont

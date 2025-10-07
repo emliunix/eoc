@@ -36,7 +36,13 @@ compile passes prog = do
       return r'
 
 mySpec2 :: Spec
-mySpec2 = describe "My Spec 2" $ runIO $ do
+mySpec2 = do
+  mySpecRco
+  mySpec3
+  mySpecRWhile
+
+mySpecRco :: Spec
+mySpecRco = describe "Test rco" $ runIO $ do
     putStrLn $ "example:\n" ++ show example
     compile passes example
   where
@@ -52,7 +58,6 @@ mySpec3 = describe "Test explicate-control" $ runIO $ do
   testExample example2
   testExample example3
   testExample example4
-  testExample example5
   where
     passes = InitialPass ("uniquify", uniquify)
       :> ("shrink", shrink)
@@ -86,6 +91,20 @@ mySpec3 = describe "Test explicate-control" $ runIO $ do
     \&                 (+ 1 x))))])
     \&     (+ y 2))
     \&"""
+
+mySpecRWhile :: Spec
+mySpecRWhile = describe "R_while" $ runIO $ do
+  testExample example5
+  where
+    passes = InitialPass ("uniquify", uniquify)
+      :> ("shrink", shrink)
+      :> ("uncoverGet", uncoverGet)
+      :> ("removeComplexOperands", removeComplexOperands)
+      :> ("explicateControl", explicateControl)
+    testExample example = do
+      putStrLn $ "example:\n" ++ show example
+      putStrLn "----"
+      compile passes example
     example5 = parseRfromString' """
     \&(let ([sum 0])
     \&  (let ([i 5])
