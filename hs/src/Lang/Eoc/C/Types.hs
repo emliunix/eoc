@@ -17,11 +17,12 @@ data CType
   | CTyUnit
   deriving (Show)
 
-data CAtm = CInt Int | CBool Bool | CVar Var
+data CAtm = CInt Int | CBool Bool | CUnit | CVar Var
 
 instance Show CAtm where
   show (CInt i) = show i
   show (CBool b) = show b
+  show CUnit = "'()"
   show (CVar v) = v
 
 data CExp = CAtm CAtm | CPrim PrimOp [CAtm]
@@ -32,6 +33,7 @@ instance Show CExp where
 
 data Stmt
   = Assign Var CExp
+  | StmtPrim PrimOp [CAtm]
 
 instance Show Stmt where
   show (Assign var exp) = "  " ++ var ++ " = " ++ show exp

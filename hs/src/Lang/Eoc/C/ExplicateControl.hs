@@ -51,6 +51,7 @@ import Control.Exception (throw)
 import Control.Monad (join)
 import Control.Monad.Trans (lift)
 
+import Data.Foldable (foldrM)
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -63,6 +64,7 @@ catm (Int_ i) = CInt i
 catm (Bool_ b) = CBool b
 catm Unit_ = CVar "unit"  -- represent unit as a variable named "unit"
 catm (Var var) = CVar var
+catm (GetBang var) = CVar var
 catm a = throw $ MyException $ "expected an atom, got " ++ show a
 
 cexpr :: Exp -> CExp
@@ -79,10 +81,13 @@ block tail = do
 
 explicateTail :: Exp -> CPass Tail
 explicateTail (Let var exp body) = explicateAssign var exp $ explicateTail body
+explicateTail (SetBang var e) = explicateAssign var e $ explicateTail Unit_
 explicateTail (If cond thn els) =
   join $ explicatePred cond
     <$> block (explicateTail thn)
     <*> block (explicateTail els)
+explicateTail (Begin exps body) = explicateEffects exps (explicateTail body)
+explicateTail w@(While cond body) = explicateEffect w (explicateTail Unit_)
 explicateTail expr = return $ Return $ cexpr expr
 
 explicateAssign :: Var -> Exp -> CPass Tail -> CPass Tail
@@ -95,6 +100,10 @@ explicateAssign var e cont =
       join $ explicatePred cond
         <$> block (explicateAssign var thn cont')
         <*> block (explicateAssign var els cont')
+    Begin exps body -> explicateEffects exps (explicateAssign var body cont)
+    (SetBang var' e') ->
+      explicateAssign var' e' $ explicateAssign var Unit_ cont
+    w@(While _ _) -> explicateEffect w $ explicateAssign var Unit_ cont
     _ -> Seq (Assign var (cexpr e)) <$> cont
 
 explicatePred :: Exp -> CPass Tail -> CPass Tail -> CPass Tail
@@ -102,6 +111,7 @@ explicatePred cond thn els =
   case cond of
     (Bool_ b) -> if b then thn else els
     (Var v) -> explicatePred (Prim PrimEq [Var v, Bool_ True]) thn els
+    (GetBang v) -> explicatePred (Prim PrimEq [Var v, Bool_ True]) thn els
     (Prim op [a, b]) ->
       IfStmt op (catm a) (catm b)
         <$> thn
@@ -112,7 +122,42 @@ explicatePred cond thn els =
         <*> block (explicatePred els' thn els)
     (Let var exp body) ->
       explicateAssign var exp $ explicatePred body thn els
+    (Begin exps body) -> explicateEffects exps (explicatePred body thn els)
     _ -> throw $ MyException $ "invalid if condition: " ++ show cond
+
+explicateEffect :: Exp -> CPass Tail -> CPass Tail
+explicateEffect expr cont =
+  case expr of
+    -- discard non-effectful expressions
+    (Int_ i) -> cont
+    (Bool_ b) -> cont
+    Unit_ -> cont
+    (Var v) -> cont
+    (GetBang v) -> cont
+    -- except for read
+    (Prim PrimRead []) -> Seq (StmtPrim PrimRead []) <$> cont
+    (Prim op args) -> cont
+    -- complex expressions
+    (SetBang var e) -> explicateAssign var e cont
+    (Let var e body) -> explicateAssign var e $ explicateEffect body cont
+    (If cond thn els) -> do
+      cont' <- block cont
+      join $ explicatePred cond
+        <$> block (explicateEffect thn cont')
+        <*> block (explicateEffect els cont')
+    (Begin exps body) -> explicateEffects (exps ++ [body]) cont
+    (While cond body) -> do
+      loopLbl <- freshBlock'
+      cont' <- block cont
+      body' <- block $ explicateEffect body (pure $ Goto loopLbl)
+      let body'' = explicatePred cond
+                  body'
+                  cont'
+      _ <- createBlock loopLbl body''
+      return $ Goto loopLbl
+
+explicateEffects :: [Exp] -> CPass Tail -> CPass Tail
+explicateEffects = flip $ foldr explicateEffect
 
 explicateControl :: R -> PassM C
 explicateControl (Program _ exp) = do
