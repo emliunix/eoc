@@ -34,6 +34,10 @@ library eoc
                     , Lang.Eoc.C
                     , Lang.Eoc.C.Types
                     , Lang.Eoc.C.ExplicateControl
+                    , Lang.Eoc.C.PlaceBlocks
+                    , Lang.Eoc.C.MergeBlocks
+                    , Lang.Eoc.Asm.Types
+                    , Lang.Eoc.Asm.Liveness
                     , Lang.Eoc.Free
                     , Lang.Eoc.Types
     build-depends:    base

@@ -21,6 +21,7 @@ The book suggested we create auxiliary functions:
 * explicate-tail
 * explicate-assign
 * explicate-pred
+* explicate-effect
 
 explicate-tail dispatches let expr to explicate-assign, and if expr to explicate-pred.
 

@@ -11,7 +11,7 @@ import Lang.Eoc.R
 import Lang.Eoc.Parser (parseRfromString')
 
 import Control.Monad ( (>=>) )
-import Lang.Eoc.C (explicateControl)
+import Lang.Eoc.C (explicateControl, placeBlocks, mergeBlocks)
 
 data Passes a b where
   InitialPass :: (Show a) => (String, a -> PassM b) -> Passes a b
@@ -19,6 +19,8 @@ data Passes a b where
 
 compile :: (Show a, Show b) => Passes a b -> a -> IO ()
 compile passes prog = do
+  putStrLn $ "input:\n" ++ show prog
+  putStrLn "----"
   _ <- runAndPrint passes prog
   return ()
   where
@@ -40,11 +42,12 @@ mySpec2 = do
   mySpecRco
   mySpec3
   mySpecRWhile
+  specPlaceBlocks
 
 mySpecRco :: Spec
-mySpecRco = describe "Test rco" $ runIO $ do
-    putStrLn $ "example:\n" ++ show example
-    compile passes example
+mySpecRco = describe "Test rco" $ do
+  it "compiles rco example" $ do
+    compile passes example `shouldReturn` ()
   where
     passes = InitialPass ("uniquify", uniquify)
       :> ("shrink", shrink)
@@ -53,21 +56,19 @@ mySpecRco = describe "Test rco" $ runIO $ do
     example = parseRfromString' "(let ([x 10]) (begin (set! x (+ x 1)) x))"
 
 mySpec3 :: Spec
-mySpec3 = describe "Test explicate-control" $ runIO $ do
-  testExample example
-  testExample example2
-  testExample example3
-  testExample example4
+mySpec3 = describe "Test explicate-control" $ do
+  it "examples compile" $ do
+    test example `shouldReturn` ()
+    test example2 `shouldReturn` ()
+    test example3 `shouldReturn` ()
+    test example4 `shouldReturn` ()
   where
     passes = InitialPass ("uniquify", uniquify)
       :> ("shrink", shrink)
       :> ("uncoverGet", uncoverGet)
       :> ("removeComplexOperands", removeComplexOperands)
       :> ("explicateControl", explicateControl)
-    testExample example = do
-      putStrLn $ "example:\n" ++ show example
-      putStrLn "----"
-      compile passes example
+    test = compile passes
     example = parseRfromString' """
     \& (let ([y (read)])
     \&   (let ([x (if (== y 0) 40 777)])
@@ -93,18 +94,18 @@ mySpec3 = describe "Test explicate-control" $ runIO $ do
     \&"""
 
 mySpecRWhile :: Spec
-mySpecRWhile = describe "R_while" $ runIO $ do
-  testExample example5
+mySpecRWhile = describe "R_while" $ do
+  it "example compiles" $ do
+    test example5 `shouldReturn` ()
   where
     passes = InitialPass ("uniquify", uniquify)
       :> ("shrink", shrink)
       :> ("uncoverGet", uncoverGet)
       :> ("removeComplexOperands", removeComplexOperands)
       :> ("explicateControl", explicateControl)
-    testExample example = do
-      putStrLn $ "example:\n" ++ show example
-      putStrLn "----"
-      compile passes example
+      :> ("placeBlocks", placeBlocks)
+      :> ("mergeBlocks", mergeBlocks)
+    test = compile passes
     example5 = parseRfromString' """
     \&(let ([sum 0])
     \&  (let ([i 5])
@@ -114,4 +115,29 @@ mySpecRWhile = describe "R_while" $ runIO $ do
     \&          (set! sum (+ sum i))
     \&          (set! i (- i 1))))
     \&      sum)))
+    \&"""
+
+specPlaceBlocks :: Spec
+specPlaceBlocks = describe "BlockPlacement" $ do
+  it "examples compiles" $ do
+    test example `shouldReturn` ()
+    test example2 `shouldReturn` ()
+  where
+    passes = InitialPass ("uniquify", uniquify)
+      :> ("shrink", shrink)
+      :> ("uncoverGet", uncoverGet)
+      :> ("removeComplexOperands", removeComplexOperands)
+      :> ("explicateControl", explicateControl)
+      :> ("placeBlocks", placeBlocks)
+      :> ("mergeBlocks", mergeBlocks)
+    test = compile passes
+    example = parseRfromString' """
+    \& (let ([y (read)])
+    \&   (let ([x (if (== y 0) 40 777)])
+    \&     (+ x 2)))
+    \&"""
+    example2 = parseRfromString' """
+    \& (let ([y (read)])
+    \&   (let ([x (if (== y 0) 40 777)])
+    \&     (+ x 2)))
     \&"""

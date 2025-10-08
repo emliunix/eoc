@@ -92,3 +92,11 @@ gotoBlock lbl tail = do
     _ -> return $ Goto lbl
 
 type CPass a = CPassT PassM a
+
+-- helper functions
+
+gotos :: Tail -> [Label]
+gotos (Seq _ t) = gotos t
+gotos (Goto lbl) = [lbl]
+gotos (IfStmt _ _ _ t1 t2) = gotos t1 ++ gotos t2
+gotos (Return _) = []
