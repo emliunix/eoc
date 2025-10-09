@@ -1,0 +1,106 @@
+{-# LANGUAGE MultilineStrings #-}
+module TestAsm
+  ( specAsm
+  ) where
+
+import Test.Hspec
+
+import Control.Monad.ST (runST)
+
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
+
+import Lang.Eoc.Asm.Types
+import Lang.Eoc.Asm.Liveness
+import Lang.Eoc.R
+import Lang.Eoc.Parser (parseRfromString')
+
+import Control.Monad ( (>=>) )
+import Lang.Eoc.C (explicateControl, placeBlocks, mergeBlocks)
+
+import Test2 (compile, Passes(..))
+import Data.Foldable (foldrM)
+
+specAsm :: Spec
+specAsm = do
+  describe "Test asm passes" $ do
+    testSplitBlocks
+    testLiveness
+
+testLiveness :: Spec
+testLiveness = do
+  it "does liveness scan" $ do
+    -- testBlock2 `shouldReturn` ()
+    let res = analyzeLiveness' exampleBlocks
+              $ Map.singleton "conclusion" $ Set.singleton (ArgReg A1)
+    lookup "start" res `shouldBe` Just (Set.fromList [ArgVar "i1", ArgVar "sum0"])
+    lookup "block0" res `shouldBe` Just (Set.fromList [ArgVar "i1", ArgVar "sum0"])
+    lookup "block2" res `shouldBe` Just (Set.fromList [ArgVar "i1", ArgVar "sum0"])
+    lookup "block1" res `shouldBe` Just (Set.singleton (ArgReg A1))
+  where
+    exampleBlocks =
+      [ ("start", start)
+      , ("block0", block0)
+      , ("block2", block2)
+      , ("block1", block1)
+      ]
+    start  = [ ILabel "start" $ IMv (ArgVar "sum0") (ArgImm 0)
+             , IMv (ArgVar "i1") (ArgImm 5)
+             , IBranch "block0"
+             ]
+    block0 = [ ILabel "block0" $ IMv (ArgVar "tmp0") (ArgVar "i1")
+             , ICondBranch (Bgt (ArgVar "tmp0") (ArgImm 0)) "block2"
+             , IBranch "block1"
+             ]
+    block2 = [ ILabel "block2" $ IMv (ArgVar "tmp2") (ArgVar "i1")
+             , IMv (ArgVar "tmp1") (ArgVar "sum0")
+             , IAdd (ArgVar "sum0") (ArgVar "tmp1") (ArgVar "tmp2")
+             , IMv (ArgVar "tmp3") (ArgVar "i1")
+             , IAddi (ArgVar "i1") (ArgVar "tmp3") (ArgImm (-1))
+             , IBranch "block0"
+             ]
+    block1 = [ ILabel "block1" $ IMv (ArgReg A1) (ArgVar "sum0")
+             , IBranch "conclusion"
+             ]
+    -- testBlock2 :: IO ()
+    -- testBlock2 = do
+    --   _ <- foldrM
+    --     (\instr acc -> do
+    --         let res = liveBefore instr acc
+    --         putStrLn $ "instr: " ++ show instr ++ "\nlives: " ++ show res
+    --         return res)
+    --     (Set.fromList [ArgVar "i1", ArgVar "sum0"])
+    --     block2
+    --   return ()
+
+testSplitBlocks :: Spec
+testSplitBlocks = do
+  it "splits blocks correctly" $ do
+    splitBlocks (concatMap snd exampleBlocks) `shouldBe` exampleBlocks
+  where
+    exampleBlocks =
+      [ ("start", start)
+      , ("block0", block0)
+      , ("block2", block2)
+      , ("block1", block1)
+      ]
+    start  = [ ILabel "start" $ IMv (ArgVar "sum0") (ArgImm 0)
+             , IMv (ArgVar "i1") (ArgImm 5)
+             , IBranch "block0"
+             ]
+    block0 = [ ILabel "block0" $ IMv (ArgVar "tmp0") (ArgVar "i1")
+             , ICondBranch (Bgt (ArgVar "tmp0") (ArgImm 0)) "block2"
+             , IBranch "block1"
+             ]
+    block2 = [ ILabel "block2" $ IMv (ArgVar "tmp2") (ArgVar "i1")
+             , IMv (ArgVar "tmp1") (ArgVar "sum0")
+             , IAdd (ArgVar "sum0") (ArgVar "tmp1") (ArgVar "tmp2")
+             , IMv (ArgVar "tmp3") (ArgVar "i1")
+             , IAddi (ArgVar "i1") (ArgVar "tmp3") (ArgImm (-1))
+             , IBranch "block0"
+             ]
+    block1 = [ ILabel "block1" $ IMv (ArgReg A1) (ArgVar "sum0")
+             , IBranch "conclusion"
+             ]

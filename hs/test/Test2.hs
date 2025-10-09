@@ -2,6 +2,8 @@
 module Test2
   ( mySpec2
   , mySpec3
+  , compile
+  , Passes(..)
   ) where
 
 import Test.Hspec

@@ -37,7 +37,9 @@ library eoc
                     , Lang.Eoc.C.PlaceBlocks
                     , Lang.Eoc.C.MergeBlocks
                     , Lang.Eoc.Asm.Types
+                    , Lang.Eoc.Asm.SelectInstructions
                     , Lang.Eoc.Asm.Liveness
+                    , Lang.Eoc.Asm.Interference
                     , Lang.Eoc.Free
                     , Lang.Eoc.Types
     build-depends:    base
@@ -51,14 +53,15 @@ test-suite eoc-test
     default-language: GHC2024
     other-modules:    Test2
                     , SexpTest
+                    , TestAsm
     -- other-extensions:
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test
     main-is:          Main.hs
-    other-modules:    Test2
     build-depends:    base ^>=4.21.0.0
                     , hspec
                     , bytestring
                     , text
                     , trifecta
+                    , containers
                     , eoc-hs:eoc

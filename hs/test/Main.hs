@@ -4,11 +4,11 @@ import Test.Hspec
 
 import SexpTest (sexpTestSpec)
 import Test2 (mySpec2)
+import TestAsm (specAsm)
 
 main :: IO ()
-main = hspec $ do
-  sexpTestSpec
-  mySpec2
-  describe "Sample Test" $ do
-    it "should pass this test" $ do
-      (1 + 1) `shouldBe` (2 :: Int)
+main = do
+  hspec $ do
+    sexpTestSpec
+    mySpec2
+    specAsm
