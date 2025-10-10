@@ -14,6 +14,7 @@ import qualified Data.Set as Set
 
 import Lang.Eoc.Asm.Types
 import Lang.Eoc.Asm.Liveness
+import Lang.Eoc.Asm.AllocateRegisters (dSatur)
 import Lang.Eoc.R
 import Lang.Eoc.Parser (parseRfromString')
 
@@ -28,6 +29,7 @@ specAsm = do
   describe "Test asm passes" $ do
     testSplitBlocks
     testLiveness
+  specDSatur
 
 testLiveness :: Spec
 testLiveness = do
@@ -104,3 +106,25 @@ testSplitBlocks = do
     block1 = [ ILabel "block1" $ IMv (ArgReg A1) (ArgVar "sum0")
              , IBranch "conclusion"
              ]
+
+specDSatur :: Spec
+specDSatur = describe "dSatur algorithm tests" $ do
+  it "colors graph correctly" $ do
+    let graph = Map.fromList
+                [ ("a", Set.singleton "b")
+                , ("b", Set.fromList $ map (: []) "acde")
+                , ("c", Set.fromList $ map (: []) "bf")
+                , ("d", Set.fromList $ map (: []) "bef" )
+                , ("e", Set.fromList $ map (: []) "bd" )
+                , ("f", Set.fromList $ map (: []) "cd" )
+                ]
+        initColors = Map.fromList [("a", -1), ("c", -1)]
+    dSatur graph initColors `shouldBe`
+         Map.fromList
+         [ ("a", -1)
+         , ("b", 0)
+         , ("c", -1)
+         , ("d", 1)
+         , ("e", 2)
+         , ("f", 0)
+         ]
