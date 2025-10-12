@@ -14,6 +14,18 @@ import qualified Data.IntSet as IS
 import Lang.Eoc.Types (MyException(..), PassM)
 import Lang.Eoc.Asm.Types
 
+-- | negatively numbered reserved registers
+-- -1 -> S0(FP)
+-- -2 -> A1
+-- and so on
+reservedRegs :: [Reg]
+reservedRegs = [S0, A1, A7, T6]
+
+-- | registers free for allocation,
+-- 0 indexed
+freeRegs :: [Reg]
+freeRegs = []
+
 dSatur :: (Ord t, Show t) => Map t (Set t) -> Map t Int -> Map t Int
 dSatur graph colorMap =
   go
@@ -28,7 +40,7 @@ dSatur graph colorMap =
       go 0 (IS.fromList adjColors)
       where
         go c used
-          | Just c == IS.lookupGE c used = go (c+1) used
+          | IS.member c used = go (c+1) used
           | otherwise = c
     go sats colors | Map.null sats = colors
     go sats colors =

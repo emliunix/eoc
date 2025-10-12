@@ -18,6 +18,7 @@ data CType
   deriving (Show)
 
 data CAtm = CInt Int | CBool Bool | CUnit | CVar Var
+  deriving (Eq, Ord)
 
 instance Show CAtm where
   show (CInt i) = show i
@@ -37,6 +38,7 @@ data Stmt
 
 instance Show Stmt where
   show (Assign var exp) = "  " ++ var ++ " = " ++ show exp
+  show (StmtPrim op args) = "  " ++ unwords (show op : map show args)
 
 data Tail
   = Return CExp

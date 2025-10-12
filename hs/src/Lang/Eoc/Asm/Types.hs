@@ -1,3 +1,4 @@
+{-# LANGUAGE OrPatterns #-}
 module Lang.Eoc.Asm.Types where
 
 import Control.Monad.State (State, get, put, runState, evalState)
@@ -11,8 +12,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 
 import Lang.Eoc.CVar
-import Lang.Eoc.Types (Var, MyException(..), PrimOp(..))
-import Control.Exception.Base (patError)
+import Lang.Eoc.Types (Var, MyException(..))
 
 data AsmInfo = AsmInfo
   { localsTypes :: Maybe (Map Var CType)
@@ -93,38 +93,78 @@ instance Show Arg where
 data BranchCond
   = Beq Arg Arg | Beqz Arg
   | Bne Arg Arg | Bnez Arg
-  | Blt Arg Arg | Bltz Arg
-  | Bgt Arg Arg | Bgtz Arg
-  | Ble Arg Arg | Blez Arg
-  | Bge Arg Arg | Bgez Arg
+  | Blt Arg Arg
+  | Bge Arg Arg
   deriving (Eq)
 
 data Instr
-  = IAdd Arg Arg Arg
-  | IAddi Arg Arg Arg
-  | INeg Arg Arg
-  | IMv Arg Arg -- pseudo-instruction, translate to Ld/St afterwards
-  | ILd Arg Arg
-  | ILi Arg Arg
-  | ISt Arg Arg
-  | IBranch String
-  | ICondBranch BranchCond String
-  | ICall String
-  | ILabel String Instr
+  = Iadd Arg Arg Arg
+  | Iaddi Arg Arg Arg
+  | Ineg Arg Arg
+  | Isub Arg Arg Arg
+
+  -- | pseudo-instruction, translate to Ld/St afterwards
+  | Pmv Arg Arg
+  | Ild Arg Arg
+  | Ili Arg Arg
+  | Ist Arg Arg
+
+  | Iand Arg Arg Arg
+  | Iandi Arg Arg Arg
+  | Ior Arg Arg Arg
+  | Iori Arg Arg Arg
+  | Ixor Arg Arg Arg
+  | Ixori Arg Arg Arg
+  -- | pseudo instruction, translate to xori dst, src, 1
+  | Pnot Arg Arg 
+
+  | Islt Arg Arg Arg
+  | Islti Arg Arg Arg
+  | Isltu Arg Arg Arg
+  | Isltiu Arg Arg Arg
+  -- | psuedo set cmp instructions
+  | Psne Arg Arg Arg
+  | Pseq Arg Arg Arg
+  | Psle Arg Arg Arg
+
+  | Ibranch String
+  | IcondBranch BranchCond String
+  | Icall String
+  | Ilabel String Instr
   deriving (Eq)
 
 instance Show Instr where
-  show (IAdd d s0 s1)         = "    add     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
-  show (IAddi d s0 s1)        = "    addi    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
-  show (INeg d s)             = "    neg     " ++ show d ++ ", " ++ show s
-  show (IMv d s)              = "    mv      " ++ show d ++ ", " ++ show s
-  show (ILd d s)              = "    ld      " ++ show d ++ ", " ++ show s
-  show (ILi d s)              = "    li      " ++ show d ++ ", " ++ show s
-  show (ISt s d)              = "    st      " ++ show s ++ ", " ++ show d
-  show (IBranch lbl)          = "    j       " ++ lbl
-  show (ICondBranch cond lbl) = "    " ++ show cond ++ ", " ++ lbl
-  show (ICall func)           = "    call    " ++ func
-  show (ILabel lbl instr)     = lbl ++ ":\n" ++
+  show (Iadd d s0 s1)         = "    add     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Iaddi d s0 s1)        = "    addi    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Ineg d s)             = "    neg     " ++ show d ++ ", " ++ show s
+  show (Isub d s0 s1)         = "    sub     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+
+  show (Pmv d s)              = "    mv      " ++ show d ++ ", " ++ show s
+  show (Ild d s)              = "    ld      " ++ show d ++ ", " ++ show s
+  show (Ili d s)              = "    li      " ++ show d ++ ", " ++ show s
+  show (Ist s d)              = "    st      " ++ show s ++ ", " ++ show d
+
+  show (Iand d s0 s1)         = "    and     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Iandi d s0 s1)        = "    andi    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Ior d s0 s1)          = "    or      " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Iori d s0 s1)         = "    ori     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Ixor d s0 s1)         = "    xor     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Ixori d s0 s1)        = "    xori    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Pnot d s)             = "    not     " ++ show d ++ ", " ++ show s
+
+  show (Islt d s0 s1)         = "    slt     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Islti d s0 s1)        = "    slti    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Isltu d s0 s1)        = "    sltu    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Isltiu d s0 s1)       = "    sltiu   " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+
+  show (Psne d s0 s1)         = "    sne     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Pseq d s0 s1)         = "    seq     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+  show (Psle d s0 s1)         = "    sle     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
+
+  show (Ibranch lbl)          = "    j       " ++ lbl
+  show (IcondBranch cond lbl) = "    " ++ show cond ++ ", " ++ lbl
+  show (Icall func)           = "    call    " ++ func
+  show (Ilabel lbl instr)     = lbl ++ ":\n" ++
                                 show instr
 
 instance Show BranchCond where
@@ -133,13 +173,7 @@ instance Show BranchCond where
   show (Bne a b)  = "bne     " ++ show a ++ ", " ++ show b
   show (Bnez a)   = "bnez    " ++ show a
   show (Blt a b)  = "blt     " ++ show a ++ ", " ++ show b
-  show (Bltz a)   = "bltz    " ++ show a
-  show (Bgt a b)  = "bgt     " ++ show a ++ ", " ++ show b
-  show (Bgtz a)   = "bgtz    " ++ show a
-  show (Ble a b)  = "ble     " ++ show a ++ ", " ++ show b
-  show (Blez a)   = "blez    " ++ show a
   show (Bge a b)  = "bge     " ++ show a ++ ", " ++ show b
-  show (Bgez a)   = "bgez    " ++ show a
 
 -- | Immediate is not considered a location
 locs' :: [Arg] -> Set Arg
@@ -147,48 +181,44 @@ locs' xs =
   go xs Set.empty
   where
     go [] s = s
-    go (i:is) s =
-      case i of
-        (ArgVar _) -> go is (Set.insert i s)
-        (ArgReg _) -> go is (Set.insert i s)
-        (ArgMemRef _ _) -> go is (Set.insert i s)
-        _ -> go is s
+    go (i@(ArgVar _; ArgReg _; ArgMemRef _ _):is) s = go is (Set.insert i s)
+    go (i:is) s = go is s
 
 readLocs :: Instr -> Set Arg
-readLocs (IAdd _ s1 s2) = locs' [s1, s2]
-readLocs (IAddi _ s1 _) = locs' [s1]
-readLocs (INeg _ s) = locs' [s]
-readLocs (IMv _ s) = locs' [s]
-readLocs (ILd _ s) = locs' [s]
-readLocs (ILi _ _) = Set.empty
-readLocs (ISt s _) = locs' [s]
-readLocs (IBranch _) = Set.empty
-readLocs (ICondBranch _ _) = Set.empty
-readLocs (ICall _) = Set.empty -- TODO: A0-A7, depends on specifc function
-readLocs (ILabel _ instr) = readLocs instr
+readLocs (Iadd _ s1 s2) = locs' [s1, s2]
+readLocs (Iaddi _ s1 _) = locs' [s1]
+readLocs (Ineg _ s) = locs' [s]
+readLocs (Pmv _ s) = locs' [s]
+readLocs (Ild _ s) = locs' [s]
+readLocs (Ili _ _) = Set.empty
+readLocs (Ist s _) = locs' [s]
+readLocs (Ibranch _) = Set.empty
+readLocs (IcondBranch _ _) = Set.empty
+readLocs (Icall _) = Set.empty -- TODO: A0-A7, depends on specifc function
+readLocs (Ilabel _ instr) = readLocs instr
 
 writeLocs :: Instr -> Set Arg
-writeLocs (IAdd d _ _) = locs' [d]
-writeLocs (IAddi d _ _) = locs' [d]
-writeLocs (INeg d _) = locs' [d]
-writeLocs (IMv d _) = locs' [d]
-writeLocs (ILd d _) = locs' [d]
-writeLocs (ILi d _) = locs' [d]
-writeLocs (ISt d _) = locs' [d]
-writeLocs (IBranch _) = Set.empty
-writeLocs (ICondBranch _ _) = Set.empty
-writeLocs (ICall _) = locs' [ArgReg A0]
-writeLocs (ILabel _ instr) = writeLocs instr
+writeLocs (Iadd d _ _) = locs' [d]
+writeLocs (Iaddi d _ _) = locs' [d]
+writeLocs (Ineg d _) = locs' [d]
+writeLocs (Pmv d _) = locs' [d]
+writeLocs (Ild d _) = locs' [d]
+writeLocs (Ili d _) = locs' [d]
+writeLocs (Ist d _) = locs' [d]
+writeLocs (Ibranch _) = Set.empty
+writeLocs (IcondBranch _ _) = Set.empty
+writeLocs (Icall _) = locs' [ArgReg A0]
+writeLocs (Ilabel _ instr) = writeLocs instr
 
 liveBefore :: Instr -> Set Arg -> Set Arg
 liveBefore instr s = s & flip Set.difference (writeLocs instr) & Set.union (readLocs instr)
 
 splitBlocks :: [Instr] -> [(String, [Instr])]
-splitBlocks (i@(ILabel lbl _):is) =
+splitBlocks (i@(Ilabel lbl _):is) =
   let (l', is', bs) = foldl go (lbl, [i], []) is in
     reverse $ (l', reverse is') : bs
   where
-    go (lbl, iAcc, bAcc) i@(ILabel lbl' _) =
+    go (lbl, iAcc, bAcc) i@(Ilabel lbl' _) =
       let bAcc' = (lbl, reverse iAcc) : bAcc
       in (lbl', [i], bAcc')
     go (lbl, iAcc, bAcc) i = (lbl, i:iAcc, bAcc)

@@ -41,6 +41,7 @@ library eoc
                     , Lang.Eoc.Asm.Liveness
                     , Lang.Eoc.Asm.Interference
                     , Lang.Eoc.Asm.AllocateRegisters
+                    , Lang.Eoc.Asm.PatchInstructions
                     , Lang.Eoc.Free
                     , Lang.Eoc.Types
     build-depends:    base

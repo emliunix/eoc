@@ -3,6 +3,9 @@ module Lang.Eoc.Types where
 import Control.Monad.State (State, state, evalState)
 import Control.Exception (Exception)
 
+import Data.Set (Set)
+import qualified Data.Set as Set
+
 type Var = String
 
 data PrimOp
@@ -13,15 +16,16 @@ data PrimOp
   | PrimEq
   | PrimNe
   | PrimLt
-  | PrimLte
+  | PrimLe
   | PrimGt
-  | PrimGte
+  | PrimGe
   | PrimAnd -- pseudo
   | PrimOr -- pseudo
-  | PrimNot
+  | PrimNot -- pseudo for xori
+  | PrimXori
   | PrimVector
   | PrimVectorLen
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 instance Show PrimOp where
   show PrimRead = "read"
@@ -31,12 +35,13 @@ instance Show PrimOp where
   show PrimEq = "=="
   show PrimNe = "/="
   show PrimLt = "<"
-  show PrimLte = "<="
+  show PrimLe = "<="
   show PrimGt = ">"
-  show PrimGte = ">="
-  show PrimAnd = "and"
-  show PrimOr = "or"
+  show PrimGe = ">="
+  show PrimAnd = "and" -- pseudo
+  show PrimOr = "or" -- pseudo
   show PrimNot = "not"
+  show PrimXori = "xori"
   show PrimVector = "vector"
   show PrimVectorLen = "vector-length"
 
@@ -47,15 +52,23 @@ parsePrimOp "+" = Just PrimPlus
 parsePrimOp "==" = Just PrimEq
 parsePrimOp "/=" = Just PrimNe
 parsePrimOp "<" = Just PrimLt
-parsePrimOp "<=" = Just PrimLte
+parsePrimOp "<=" = Just PrimLe
 parsePrimOp ">" = Just PrimGt
-parsePrimOp ">=" = Just PrimGte
+parsePrimOp ">=" = Just PrimGe
 parsePrimOp "and" = Just PrimAnd
 parsePrimOp "or" = Just PrimOr
 parsePrimOp "not" = Just PrimNot
 parsePrimOp "vector" = Just PrimVector
 parsePrimOp "vector-length" = Just PrimVectorLen
 parsePrimOp _ = Nothing
+
+cmpOpSet' :: Set PrimOp
+cmpOpSet' = Set.fromList [PrimEq, PrimNe, PrimLt, PrimLe, PrimGt, PrimGe]
+
+isCmpOp :: PrimOp -> Bool
+isCmpOp op
+  | op `Set.member` cmpOpSet' = True
+  | otherwise = False
 
 newtype MyException = MyException String
   deriving (Show)
