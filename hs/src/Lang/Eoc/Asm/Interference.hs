@@ -15,12 +15,12 @@ import Data.IntSet (IntSet)
 import qualified Data.IntSet as IS
 
 interferes :: Instr -> Set Arg -> [(Arg, Arg)]
-interferes (IMv d s) lives =
+interferes (Pmv d s) lives =
   [ (d, r)
   | r <- Set.toList lives
   , r /= d && r /= s
   ]
-interferes (ICall _) lives =
+interferes (Icall _) lives =
   [ (r1, r2)
   | r1 <- map ArgReg callerSavedRegs
   , r2 <- Set.toList lives

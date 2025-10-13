@@ -16,9 +16,9 @@ import Lang.Eoc.Asm.Types
 
 gotos :: [Instr] -> [String]
 gotos [] = []
-gotos (ILabel _ i : is) = gotos (i:is)
-gotos (IBranch lbl : is) = lbl : gotos is
-gotos (ICondBranch _ lbl : is) = lbl : gotos is
+gotos (Ilabel _ i : is) = gotos (i:is)
+gotos (Ibranch lbl : is) = lbl : gotos is
+gotos (IcondBranch _ lbl : is) = lbl : gotos is
 gotos (_ : is) = gotos is
 
 multiMap :: (Ord k, Ord v) => [(k, v)] -> Map k (Set v)
@@ -47,12 +47,12 @@ analyzeLiveness' blocks inits =
       -- recalculates livesAfter for each label
       map ((\l -> (l, getLivesAfter m l)) . fst) blocks
     go m (l:ls) = let
-      -- livesAfter is union of all livesBefore of successors
+      -- livesAfter is the union of all successors' livesBefore
       livesAfter = getLivesAfter m l
+      -- the new livesBefore by applying liveBefore to the new livesAfter
+      lives' = foldr liveBefore livesAfter (lookupMap' l codes)
       -- the old livesBefore
       lives = lookupMap' l m
-      -- the new livesBefore
-      lives' = foldr liveBefore livesAfter (lookupMap' l codes)
       in if lives /= lives'
          then
            let m' = Map.insert l lives' m

@@ -43,9 +43,8 @@ selTail (IfStmt cmp a b (Goto lbThn) (Goto lbEls))
   -- branch to else, fall through to then, following common CPU conventions
   | otherwise = [nCondBr cmp a b lbEls, Ibranch lbThn]
   where
-    -- eq
+    -- eq / ne
     nCondBr PrimEq a b = IcondBranch (Bne (selAtm a) (selAtm b))
-    -- ne
     nCondBr PrimNe a b = IcondBranch (Beq (selAtm a) (selAtm b))
     -- cmp
     nCondBr PrimGe a b = IcondBranch (Bge (selAtm b) (selAtm a))
@@ -85,6 +84,13 @@ selExp dst (CPrim cmpOp args)
 selExp dst (CPrim PrimNot [a]) =
   -- this relies on we gurantee using 1 for True, instead of any non-zero value
   [Ixori dst (selAtm a) (ArgImm 1)]
+selExp _ e@(CPrim _ _) =
+  throw $ MyException $ "primop not implemented: " ++ show e
 
 selectInstructions :: C -> PassM Asm
-selectInstructions _ = error "not implemented"
+selectInstructions (CProgram info blks) = pure $ AsmProgram emptyAsmInfo instrs
+  where
+    instrs = concatMap mkBlk blks
+    mkBlk (lbl, tail) = case selTail tail of
+      i:is -> Ilabel lbl i : is
+      [] -> [Ilabel lbl noop]

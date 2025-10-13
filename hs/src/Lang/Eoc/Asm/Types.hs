@@ -20,6 +20,9 @@ data AsmInfo = AsmInfo
   , livesMap :: Maybe (Map String (Set Arg)) -- ^ label to live variables before that point
   } deriving (Show)
 
+emptyAsmInfo :: AsmInfo
+emptyAsmInfo = AsmInfo Nothing Nothing Nothing
+
 data Asm = AsmProgram AsmInfo [Instr]
 
 instance Show Asm where
@@ -223,3 +226,6 @@ splitBlocks (i@(Ilabel lbl _):is) =
       in (lbl', [i], bAcc')
     go (lbl, iAcc, bAcc) i = (lbl, i:iAcc, bAcc)
 splitBlocks _ = throw $ MyException "instruction sequence must start with a label"
+
+noop :: Instr
+noop = Iaddi (ArgReg X0) (ArgReg X0) (ArgImm 0)

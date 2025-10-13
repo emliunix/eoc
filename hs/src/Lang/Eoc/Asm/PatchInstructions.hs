@@ -137,7 +137,7 @@ patchInstrs :: [Instr] -> [Instr]
 patchInstrs [] = []
 patchInstrs (Ilabel l i : is) = case patchInstrs (i:is) of
   i:is -> Ilabel l i:is
-  [] -> [Ilabel l (Iaddi (ArgReg X0) (ArgReg X0) (ArgImm 0))] -- NOP
+  [] -> [Ilabel l noop] -- NOP
 patchInstrs (i:is) =
   case i of
     Pmv a b | a == b -> cont  -- remove redundant move
@@ -165,11 +165,11 @@ patchInstrs (i:is) =
           return [Ixori d' s' (ArgImm 1)]
     Pseq d s0 s1 -> commBinImm seq seqi d s0 s1 ++ cont
       where
-        seq d s0 s1 = [Ixori d s0 s1, Isltiu d d (ArgImm 1)]
+        seq d s0 s1 = [Ixor d s0 s1, Isltiu d d (ArgImm 1)] -- d == 0
         seqi d s0 i = [Ixori d s0 i, Isltiu d d (ArgImm 1)]
     Psne d s0 s1 -> commBinImm sne snei d s0 s1 ++ cont
       where
-        sne d s0 s1 = [Ixor d s0 s1, Isltu d (ArgReg X0) d]
+        sne d s0 s1 = [Ixor d s0 s1, Isltu d (ArgReg X0) d] -- d > 0
         snei d s0 i = [Ixori d s0 i, Isltu d (ArgReg X0) d]
     Psle d s0 s1 -> runPatch sle ++ cont
       -- a <= b <=> not (b < a)
