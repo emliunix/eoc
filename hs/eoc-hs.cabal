@@ -59,6 +59,7 @@ test-suite eoc-test
                     , SexpTest
                     , TestAsm
                     , TestMoves
+                    , TestRegisterAllocation
     -- other-extensions:
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test

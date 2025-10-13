@@ -119,7 +119,7 @@ specDSatur = describe "dSatur algorithm tests" $ do
                 , ("f", Set.fromList $ map (: []) "cd" )
                 ]
         initColors = Map.fromList [("a", -1), ("c", -1)]
-    dSatur graph initColors `shouldBe`
+    dSatur graph initColors Map.empty `shouldBe`
          Map.fromList
          [ ("a", -1)
          , ("b", 0)
