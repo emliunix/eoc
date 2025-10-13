@@ -78,4 +78,4 @@ uncoverLives (AsmProgram info instrs) =
   let blocks = splitBlocks instrs
       inits = Map.fromList [("conclusion", Set.singleton (ArgReg A1))]
       livesAfters = analyzeLiveness' blocks inits
-  in pure $ AsmProgram (info { livesMap = Just (Map.fromList livesAfters) }) instrs
+  in pure $ AsmProgram (info { aiLivesMap = Just (Map.fromList livesAfters) }) instrs

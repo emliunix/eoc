@@ -39,7 +39,8 @@ library eoc
                     , Lang.Eoc.Asm.Types
                     , Lang.Eoc.Asm.SelectInstructions
                     , Lang.Eoc.Asm.Liveness
-                    , Lang.Eoc.Asm.Interference
+                    , Lang.Eoc.Asm.Moves
+                    , Lang.Eoc.Asm.Interferences
                     , Lang.Eoc.Asm.AllocateRegisters
                     , Lang.Eoc.Asm.PatchInstructions
                     , Lang.Eoc.Free
@@ -49,6 +50,7 @@ library eoc
                     , mtl
                     , trifecta
                     , containers
+                    , equivalence
 
 test-suite eoc-test
     import:           warnings
@@ -56,6 +58,7 @@ test-suite eoc-test
     other-modules:    Test2
                     , SexpTest
                     , TestAsm
+                    , TestMoves
     -- other-extensions:
     type:             exitcode-stdio-1.0
     hs-source-dirs:   test

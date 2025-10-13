@@ -4,6 +4,7 @@ import Test.Hspec
 
 import SexpTest (sexpTestSpec)
 import Test2 (mySpec2)
+import TestMoves (specMoves)
 import TestAsm (specAsm)
 
 main :: IO ()
@@ -12,3 +13,4 @@ main = do
     sexpTestSpec
     mySpec2
     specAsm
+    specMoves

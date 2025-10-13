@@ -48,23 +48,23 @@ testLiveness = do
       , ("block2", block2)
       , ("block1", block1)
       ]
-    start  = [ ILabel "start" $ IMv (ArgVar "sum0") (ArgImm 0)
-             , IMv (ArgVar "i1") (ArgImm 5)
-             , IBranch "block0"
+    start  = [ Ilabel "start" $ Pmv (ArgVar "sum0") (ArgImm 0)
+             , Pmv (ArgVar "i1") (ArgImm 5)
+             , Ibranch "block0"
              ]
-    block0 = [ ILabel "block0" $ IMv (ArgVar "tmp0") (ArgVar "i1")
-             , ICondBranch (Bgt (ArgVar "tmp0") (ArgImm 0)) "block2"
-             , IBranch "block1"
+    block0 = [ Ilabel "block0" $ Pmv (ArgVar "tmp0") (ArgVar "i1")
+             , IcondBranch (Blt (ArgReg X0) (ArgVar "tmp0")) "block2"
+             , Ibranch "block1"
              ]
-    block2 = [ ILabel "block2" $ IMv (ArgVar "tmp2") (ArgVar "i1")
-             , IMv (ArgVar "tmp1") (ArgVar "sum0")
-             , IAdd (ArgVar "sum0") (ArgVar "tmp1") (ArgVar "tmp2")
-             , IMv (ArgVar "tmp3") (ArgVar "i1")
-             , IAddi (ArgVar "i1") (ArgVar "tmp3") (ArgImm (-1))
-             , IBranch "block0"
+    block2 = [ Ilabel "block2" $ Pmv (ArgVar "tmp2") (ArgVar "i1")
+             , Pmv (ArgVar "tmp1") (ArgVar "sum0")
+             , Iadd (ArgVar "sum0") (ArgVar "tmp1") (ArgVar "tmp2")
+             , Pmv (ArgVar "tmp3") (ArgVar "i1")
+             , Iaddi (ArgVar "i1") (ArgVar "tmp3") (ArgImm (-1))
+             , Ibranch "block0"
              ]
-    block1 = [ ILabel "block1" $ IMv (ArgReg A1) (ArgVar "sum0")
-             , IBranch "conclusion"
+    block1 = [ Ilabel "block1" $ Pmv (ArgReg A1) (ArgVar "sum0")
+             , Ibranch "conclusion"
              ]
     -- testBlock2 :: IO ()
     -- testBlock2 = do
@@ -88,23 +88,23 @@ testSplitBlocks = do
       , ("block2", block2)
       , ("block1", block1)
       ]
-    start  = [ ILabel "start" $ IMv (ArgVar "sum0") (ArgImm 0)
-             , IMv (ArgVar "i1") (ArgImm 5)
-             , IBranch "block0"
+    start  = [ Ilabel "start" $ Pmv (ArgVar "sum0") (ArgImm 0)
+             , Pmv (ArgVar "i1") (ArgImm 5)
+             , Ibranch "block0"
              ]
-    block0 = [ ILabel "block0" $ IMv (ArgVar "tmp0") (ArgVar "i1")
-             , ICondBranch (Bgt (ArgVar "tmp0") (ArgImm 0)) "block2"
-             , IBranch "block1"
+    block0 = [ Ilabel "block0" $ Pmv (ArgVar "tmp0") (ArgVar "i1")
+             , IcondBranch (Blt (ArgReg X0) (ArgVar "tmp0")) "block2"
+             , Ibranch "block1"
              ]
-    block2 = [ ILabel "block2" $ IMv (ArgVar "tmp2") (ArgVar "i1")
-             , IMv (ArgVar "tmp1") (ArgVar "sum0")
-             , IAdd (ArgVar "sum0") (ArgVar "tmp1") (ArgVar "tmp2")
-             , IMv (ArgVar "tmp3") (ArgVar "i1")
-             , IAddi (ArgVar "i1") (ArgVar "tmp3") (ArgImm (-1))
-             , IBranch "block0"
+    block2 = [ Ilabel "block2" $ Pmv (ArgVar "tmp2") (ArgVar "i1")
+             , Pmv (ArgVar "tmp1") (ArgVar "sum0")
+             , Iadd (ArgVar "sum0") (ArgVar "tmp1") (ArgVar "tmp2")
+             , Pmv (ArgVar "tmp3") (ArgVar "i1")
+             , Iaddi (ArgVar "i1") (ArgVar "tmp3") (ArgImm (-1))
+             , Ibranch "block0"
              ]
-    block1 = [ ILabel "block1" $ IMv (ArgReg A1) (ArgVar "sum0")
-             , IBranch "conclusion"
+    block1 = [ Ilabel "block1" $ Pmv (ArgReg A1) (ArgVar "sum0")
+             , Ibranch "conclusion"
              ]
 
 specDSatur :: Spec

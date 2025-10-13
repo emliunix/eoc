@@ -21,7 +21,7 @@ data PrimOp
   | PrimGe
   | PrimAnd -- pseudo
   | PrimOr -- pseudo
-  | PrimNot -- pseudo for xori
+  | PrimNot -- pseudo, translated to xori
   | PrimXori
   | PrimVector
   | PrimVectorLen

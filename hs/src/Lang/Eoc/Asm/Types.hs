@@ -15,18 +15,20 @@ import Lang.Eoc.CVar
 import Lang.Eoc.Types (Var, MyException(..))
 
 data AsmInfo = AsmInfo
-  { localsTypes :: Maybe (Map Var CType)
-  , stackSpace :: Maybe Int
-  , livesMap :: Maybe (Map String (Set Arg)) -- ^ label to live variables before that point
+  { aiLocalsTypes :: Maybe (Map Var CType)
+  , aiStackSpace :: Maybe Int
+  , aiLivesMap :: Maybe (Map String (Set Arg)) -- ^ label to live variables before that point
+  , aiInferences :: Maybe (Map Arg (Set Arg))
+  , aiMoves :: Maybe [Set Arg]
   } deriving (Show)
 
 emptyAsmInfo :: AsmInfo
-emptyAsmInfo = AsmInfo Nothing Nothing Nothing
+emptyAsmInfo = AsmInfo Nothing Nothing Nothing Nothing Nothing
 
 data Asm = AsmProgram AsmInfo [Instr]
 
 instance Show Asm where
-  show (AsmProgram (AsmInfo locals stack lives) instrs) =
+  show (AsmProgram (AsmInfo locals stack lives inferences moves) instrs) =
     ".localsTypes = " ++ show locals ++ "\n" ++
     ".stackSpace = " ++ show stack ++ "\n" ++
     concatMap (\i -> show i ++ "\n") instrs
@@ -136,6 +138,9 @@ data Instr
   | Ilabel String Instr
   deriving (Eq)
 
+noop :: Instr
+noop = Iaddi (ArgReg X0) (ArgReg X0) (ArgImm 0)
+
 instance Show Instr where
   show (Iadd d s0 s1)         = "    add     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
   show (Iaddi d s0 s1)        = "    addi    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
@@ -185,33 +190,65 @@ locs' xs =
   where
     go [] s = s
     go (i@(ArgVar _; ArgReg _; ArgMemRef _ _):is) s = go is (Set.insert i s)
-    go (i:is) s = go is s
+    go (_:is) s = go is s
 
 readLocs :: Instr -> Set Arg
-readLocs (Iadd _ s1 s2) = locs' [s1, s2]
-readLocs (Iaddi _ s1 _) = locs' [s1]
-readLocs (Ineg _ s) = locs' [s]
-readLocs (Pmv _ s) = locs' [s]
-readLocs (Ild _ s) = locs' [s]
-readLocs (Ili _ _) = Set.empty
-readLocs (Ist s _) = locs' [s]
-readLocs (Ibranch _) = Set.empty
-readLocs (IcondBranch _ _) = Set.empty
-readLocs (Icall _) = Set.empty -- TODO: A0-A7, depends on specifc function
 readLocs (Ilabel _ instr) = readLocs instr
+readLocs instr = case instr of
+  Iadd   _ s0 s1   -> locs' [s0, s1]
+  Iaddi  _ s0 _    -> locs' [s0]
+  Ineg   _ s       -> locs' [s]
+  Isub   _ s0 s1   -> locs' [s0, s1]
+  Pmv    _ s       -> locs' [s]
+  Ild    _ s       -> locs' [s]
+  Ili    _ _       -> Set.empty
+  Ist    s _       -> locs' [s]
+  Iand   _ s0 s1   -> locs' [s0, s1]
+  Iandi  _ s0 _    -> locs' [s0]
+  Ior    _ s0 s1   -> locs' [s0, s1]
+  Iori   _ s0 _    -> locs' [s0]
+  Ixor   _ s0 s1   -> locs' [s0, s1]
+  Ixori  _ s0 _    -> locs' [s0]
+  Pnot   _ s       -> locs' [s]
+  Islt   _ s0 s1   -> locs' [s0, s1]
+  Islti  _ s0 _    -> locs' [s0]
+  Isltu  _ s0 s1   -> locs' [s0, s1]
+  Isltiu _ s0 _    -> locs' [s0]
+  Psne   _ s0 s1   -> locs' [s0, s1]
+  Pseq   _ s0 s1   -> locs' [s0, s1]
+  Psle   _ s0 s1   -> locs' [s0, s1]
+  Ibranch _        -> Set.empty
+  IcondBranch _ _  -> Set.empty
+  Icall _          -> Set.empty  -- TODO: consider argument registers (A0–A7)
 
 writeLocs :: Instr -> Set Arg
-writeLocs (Iadd d _ _) = locs' [d]
-writeLocs (Iaddi d _ _) = locs' [d]
-writeLocs (Ineg d _) = locs' [d]
-writeLocs (Pmv d _) = locs' [d]
-writeLocs (Ild d _) = locs' [d]
-writeLocs (Ili d _) = locs' [d]
-writeLocs (Ist d _) = locs' [d]
-writeLocs (Ibranch _) = Set.empty
-writeLocs (IcondBranch _ _) = Set.empty
-writeLocs (Icall _) = locs' [ArgReg A0]
 writeLocs (Ilabel _ instr) = writeLocs instr
+writeLocs instr = case instr of
+  Iadd   d _ _     -> locs' [d]
+  Iaddi  d _ _     -> locs' [d]
+  Ineg   d _       -> locs' [d]
+  Isub   d _ _     -> locs' [d]
+  Pmv    d _       -> locs' [d]
+  Ild    d _       -> locs' [d]
+  Ili    d _       -> locs' [d]
+  Ist    _ d       -> locs' [d]
+  Iand   d _ _     -> locs' [d]
+  Iandi  d _ _     -> locs' [d]
+  Ior    d _ _     -> locs' [d]
+  Iori   d _ _     -> locs' [d]
+  Ixor   d _ _     -> locs' [d]
+  Ixori  d _ _     -> locs' [d]
+  Pnot   d _       -> locs' [d]
+  Islt   d _ _     -> locs' [d]
+  Islti  d _ _     -> locs' [d]
+  Isltu  d _ _     -> locs' [d]
+  Isltiu d _ _     -> locs' [d]
+  Psne   d _ _     -> locs' [d]
+  Pseq   d _ _     -> locs' [d]
+  Psle   d _ _     -> locs' [d]
+  Ibranch _        -> Set.empty
+  IcondBranch _ _  -> Set.empty
+  Icall _          -> locs' [ArgReg A0] -- return register
 
 liveBefore :: Instr -> Set Arg -> Set Arg
 liveBefore instr s = s & flip Set.difference (writeLocs instr) & Set.union (readLocs instr)
@@ -227,5 +264,44 @@ splitBlocks (i@(Ilabel lbl _):is) =
     go (lbl, iAcc, bAcc) i = (lbl, i:iAcc, bAcc)
 splitBlocks _ = throw $ MyException "instruction sequence must start with a label"
 
-noop :: Instr
-noop = Iaddi (ArgReg X0) (ArgReg X0) (ArgImm 0)
+replaceVars :: Map Arg Arg -> Instr -> Instr
+replaceVars m (Ilabel lbl i) = Ilabel lbl (replaceVars m i)
+replaceVars m instr =
+  let re v = Map.findWithDefault v v m
+  in case instr of
+    Iadd   d s0 s1   -> Iadd   (re d) (re s0) (re s1)
+    Iaddi  d s0 s1   -> Iaddi  (re d) (re s0) (re s1)
+    Ineg   d s       -> Ineg   (re d) (re s)
+    Isub   d s0 s1   -> Isub   (re d) (re s0) (re s1)
+  
+    Pmv    d s       -> Pmv    (re d) (re s)
+    Ild    d s       -> Ild    (re d) (re s)
+    Ili    d s       -> Ili    (re d) (re s)
+    Ist    s d       -> Ist    (re s) (re d)
+  
+    Iand   d s0 s1   -> Iand   (re d) (re s0) (re s1)
+    Iandi  d s0 s1   -> Iandi  (re d) (re s0) (re s1)
+    Ior    d s0 s1   -> Ior    (re d) (re s0) (re s1)
+    Iori   d s0 s1   -> Iori   (re d) (re s0) (re s1)
+    Ixor   d s0 s1   -> Ixor   (re d) (re s0) (re s1)
+    Ixori  d s0 s1   -> Ixori  (re d) (re s0) (re s1)
+    Pnot   d s       -> Pnot   (re d) (re s)
+  
+    Islt   d s0 s1   -> Islt   (re d) (re s0) (re s1)
+    Islti  d s0 s1   -> Islti  (re d) (re s0) (re s1)
+    Isltu  d s0 s1   -> Isltu  (re d) (re s0) (re s1)
+    Isltiu d s0 s1   -> Isltiu (re d) (re s0) (re s1)
+  
+    Psne   d s0 s1   -> Psne   (re d) (re s0) (re s1)
+    Pseq   d s0 s1   -> Pseq   (re d) (re s0) (re s1)
+    Psle   d s0 s1   -> Psle   (re d) (re s0) (re s1)
+    IcondBranch cond lbl ->
+      let cond' = case cond of
+            Beq a b -> Beq (re a) (re b)
+            Beqz a -> Beqz (re a)
+            Bne a b -> Bne (re a) (re b)
+            Bnez a -> Bnez (re a)
+            Blt a b -> Blt (re a) (re b)
+            Bge a b -> Bge (re a) (re b)
+      in IcondBranch cond' lbl
+    Ibranch _; Icall _ -> instr
