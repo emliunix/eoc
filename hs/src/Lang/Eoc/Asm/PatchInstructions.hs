@@ -88,7 +88,7 @@ instance ToInstrs [Instr] where
 -- and possibly an immediate source operand.
 -- eg. add addi, xor xori, and andi, or ori
 commBinImm ::
-  forall a b. (ToInstrs a, ToInstrs b) => 
+  forall a b. (ToInstrs a, ToInstrs b) =>
   -- | d s s case
   (Arg -> Arg -> Arg -> a) ->
   -- | d s imm case
@@ -142,6 +142,14 @@ patchInstrs (i:is) =
   case i of
     Pmv a b | a == b -> cont  -- remove redundant move
     -- commutative binary op with immediate alt
+    Pmv d@(ArgReg _) s@(ArgImm _) -> Ili d s : cont
+    Pmv d@(ArgReg _) s@(ArgMemRef _ _) -> Ild s d : cont
+    Pmv d@(ArgReg _) s@(ArgReg _) -> Iaddi d s (ArgImm 0) : cont
+    Pmv d@(ArgMemRef _ _) s -> runPatch st ++ cont
+      where
+        st = do
+          s' <- patchS s
+          return [Ist s' d]
     Iadd d s0 s1 -> commBinImm Iadd Iaddi d s0 s1 ++ cont
     Iand d s0 s1 -> commBinImm Iand Iandi d s0 s1 ++ cont
     Ior d s0 s1 -> commBinImm Ior Iori d s0 s1 ++ cont

@@ -7,18 +7,21 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
-import Lang.Eoc.Asm.AllocateRegisters (dSatur)
+import Lang.Eoc.Asm.Liveness
+import Lang.Eoc.Asm.Interferences
+import Lang.Eoc.Asm.Moves
+import Lang.Eoc.Asm.AllocateRegisters 
+import Lang.Eoc.Asm.PatchInstructions
 import Lang.Eoc.Asm.Types
+
+import Test2 (Passes(..), compile)
 
 specRegisterAllocation :: Spec
 specRegisterAllocation = do
   describe "Test register allocation" $ do
-    specDSatur
-
-specDSatur :: Spec
-specDSatur = describe "dSatur algorithm tests" $ do
-  test1
-  testMoveBiasing
+    test1
+    testMoveBiasing
+    testCompileE2E
 
 test1 :: Spec
 test1 = do
@@ -84,3 +87,26 @@ testMoveBiasing = do
             , (ArgVar "x", 0)
             , (ArgVar "v", 0)
             ]
+
+testCompileE2E :: Spec
+testCompileE2E = do
+  it "compiles with register allocation e2e" $ do
+    test example `shouldReturn` ()
+  where
+    passes = InitialPass ("uncoverMoves", uncoverMoves)
+      :> ("uncoverLives", uncoverLives)
+      :> ("buildInterferences", buildInterferences)
+      :> ("allocateRegisters", allocateRegisters)
+      :> ("patchInstructions", patchInstructions)
+    test = compile passes
+    example = AsmProgram emptyAsmInfo instrs
+    instrs =
+      [ Ilabel "start" $ Pmv (ArgVar "v") (ArgImm 1)
+      , Pmv (ArgVar "w") (ArgImm 42)
+      , Iadd (ArgVar "x") (ArgVar "v") (ArgImm 7)
+      , Pmv (ArgVar "y") (ArgVar "x")
+      , Iadd (ArgVar "z") (ArgVar "x") (ArgVar "w")
+      , Ineg (ArgVar "t") (ArgVar "y")
+      , Iadd (ArgReg A0) (ArgVar "z") (ArgVar "t")
+      , Ibranch "conclusion"
+      ]
