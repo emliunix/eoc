@@ -18,8 +18,8 @@ data AsmInfo = AsmInfo
   { aiLocalsTypes :: Maybe (Map Var CType)
   , aiStackSpace :: Maybe Int
   , aiLivesMap :: Maybe (Map String (Set Arg)) -- ^ label to live variables before that point
-  , aiInferences :: Maybe (Map Arg (Set Arg))
-  , aiMoves :: Maybe [Set Arg]
+  , aiInterferences :: Maybe (Map Arg (Set Arg))
+  , aiMoves :: Maybe (Map Arg (Set Arg))
   } deriving (Show)
 
 emptyAsmInfo :: AsmInfo

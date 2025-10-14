@@ -3,16 +3,12 @@ module Lang.Eoc.Asm.Interferences where
 import Lang.Eoc.Types (MyException(..), PassM)
 import Lang.Eoc.Asm.Types
 
-import Data.Ord (comparing)
-import Data.List (maximumBy)
-import Data.Maybe (mapMaybe, maybeToList)
+import Control.Exception (throw)
 
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IS
 
 interferes :: Instr -> Set Arg -> [(Arg, Arg)]
 interferes (Pmv d s) lives =
@@ -35,47 +31,27 @@ interferes i lives =
 
 buildFromBlock :: [Instr] -> Set Arg -> [(Arg, Arg)]
 buildFromBlock instrs liveAfter =
-  let lives = foldr (\i acc@(lives:_) -> (liveBefore i lives) : acc) [liveAfter] instrs
+  let lives = foldr (\i acc@(lives:_) -> liveBefore i lives : acc) [liveAfter] instrs
   in concat $ zipWith interferes instrs (tail lives)
 
--- | precomputed values:
--- 
--- state:
--- 1. assigned colors: Map Var Color
---    since all registers are pre-colored, when miss, it must be a variable
--- 2. inference graph: Map Var (Set Var)
--- 3. unassigned variables: [Var]
--- computed:
--- 1. unassigned -> saturation
-dSatur :: Map Arg (Set Arg) -> Map Arg Int -> [Arg] -> Map Arg Int
-dSatur graph colorMap uncolored =
-  go
-    (Map.fromList [(a, saturation colorMap a) | a <- uncolored])
-    colorMap
+buildInterferences' :: [(String, [Instr])] -> Map String (Set Arg) -> Map Arg (Set Arg)
+buildInterferences' blocks livesMap =
+  foldl goEdge Map.empty edges
   where
-    saturation colorMap x =
-      let adjs = Map.findWithDefault Set.empty x graph
-      in mapMaybe (`Map.lookup` colorMap) (Set.toList adjs)
-    pickColor adjColors =
-      go 0 (IS.fromList adjColors)
-      where
-        go c used
-          | Just c == IS.lookupGE c used = go (c+1) used
-          | otherwise = c
-    go sats colors | Map.null sats = colors
-    go sats colors =
-      -- find the most saturated variable
-      let (x, adjColors) = maximumBy
-            (comparing (length . snd))
-            $ Map.toList sats
-          -- assign the lowest possible color
-          colors' = let xCol = pickColor adjColors
-                    in  Map.insert x xCol colors
-          -- delete x from sats
-          -- update all neighbors of x new saturation
-          sats' = foldl go (Map.delete x sats) (concat $ maybeToList $ Set.toList <$> Map.lookup x graph)
-            where go sats v = Map.insert v (saturation colors' v) sats
-      in go sats' colors'
+    edges = foldl goBlk [] blocks
+    goBlk acc (lbl, blk) =
+      let livesAfter = case Map.lookup lbl livesMap of
+            Just m -> m
+            Nothing -> throw $ MyException $ "Liveness information missing for block " ++ lbl
+      in buildFromBlock blk livesAfter ++ acc
+    goEdge m (v1, v2) =
+      Map.insertWith Set.union v1 (Set.singleton v2) $
+        Map.insertWith Set.union v2 (Set.singleton v1) m
 
-buildInterferenceGraph :: Asm -> PassM Asm
-buildInterferenceGraph _ = error "not implemented"
+buildInterferences :: Asm -> PassM Asm
+buildInterferences (AsmProgram info instrs) = pure $ AsmProgram (info {aiInterferences = Just interferenceGraph}) instrs
+  where
+    livesMap = case aiLivesMap info of
+      Just lm -> lm
+      Nothing -> throw $ MyException "Liveness information missing when building interference graph"
+    interferenceGraph = buildInterferences' (splitBlocks instrs) livesMap

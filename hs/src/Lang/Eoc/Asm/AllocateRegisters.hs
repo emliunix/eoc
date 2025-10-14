@@ -77,11 +77,11 @@ dSatur graph colorMap moves =
 allocateRegisters :: Asm -> PassM Asm
 allocateRegisters (AsmProgram info instrs) = pure $ AsmProgram info instrs'
   where
-    interferenceGraph = case aiInferences info of
+    interferenceGraph = case aiInterferences info of
       Just g -> g
       Nothing -> throw $ MyException "no interference graph found in AsmInfo"
     movesGraph = case aiMoves info of
-      Just mvs -> Map.fromList [ (v, s) | s <- mvs, v <- Set.toList s ]
+      Just mvs -> mvs
       Nothing -> throw $ MyException "no moves found in AsmInfo"
     initialColors = Map.fromList $ zip (map ArgReg reservedRegs) (map negate [1..])
     colors = dSatur interferenceGraph initialColors movesGraph

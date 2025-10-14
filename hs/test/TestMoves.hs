@@ -2,6 +2,8 @@ module TestMoves where
 
 import Test.Hspec
 
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 
@@ -24,11 +26,9 @@ specMoves = do
       let (AsmProgram info' _) = execPass $ uncoverMoves asm
       aiMoves info' `shouldBe` Just expectedMoves
   where
-    expectedMoves =
-      [ Set.fromList
-        [ ArgVar "a"
-        , ArgVar "b"
-        , ArgVar "c"
-        ]
-      , Set.fromList [ ArgVar "d", ArgVar "e" ]
-      ]
+    expectedMoves = Map.fromList
+      [ (ArgVar "a", Set.fromList $ map ArgVar ["b","c"])
+      , (ArgVar "b", Set.fromList $ map ArgVar ["a","c"])
+      , (ArgVar "c", Set.fromList $ map ArgVar ["a","b"])
+      , (ArgVar "d", Set.fromList [ArgVar "e"])
+      , (ArgVar "e", Set.fromList [ArgVar "d"])]
