@@ -21,6 +21,12 @@ rcoExpr (Prim op args) = do
   (args', depss) <- unzip <$> traverse rcoAtm args
   let deps = concat depss
   return $ foldl (\body (v, e) -> Let v e body) (Prim op args') deps
+rcoExpr (Apply f args) = do
+  (f', fDeps) <- rcoAtm f
+  (args', argsDepss) <- unzip <$> traverse rcoAtm args
+  let argsDeps = concat argsDepss
+      deps = fDeps ++ argsDeps
+  return $ foldl (\body (v, e) -> Let v e body) (Apply f' args') deps
 -- the followings are simply to recurse
 rcoExpr (Let var exp body) = do
   exp' <- rcoExpr exp
@@ -52,6 +58,7 @@ rcoAtm t@(Int_ _) = return (t, [])
 rcoAtm t@(Bool_ _) = return (t, [])
 rcoAtm t@Unit_ = return (t, [])
 rcoAtm t@(Var _) = return (t, [])
+-- FunRef is considered a complex
 rcoAtm e = do
   e' <- rcoExpr e
   tmpv <- freshTmpVar
