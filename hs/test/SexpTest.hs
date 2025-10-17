@@ -74,3 +74,16 @@ sexpTestSpec = describe "S-expression Parser Tests" $ do
             (Prim PrimNeg [Var "x", Int_ 1]))
     -- putStrLn $ "sexp: " ++ show (success (parseSexpFromString input))
     result `shouldBeSuccess` expectedR
+  it "parses defines" $ do
+    let input = """
+          \&(define (add [a:Int] [b:Int]) : Int
+          \&  (+ a b))
+          \&(add 1 2)
+          \&"""
+        prog = parseRfromString input
+        expected = RDefsExpProgram Info
+          [Def DefInfo "add" [("a", TyInt), ("b", TyInt)] TyInt
+            (Prim PrimPlus [Var "a", Var "b"])
+          ]
+          (Apply (Var "add") [Int_ 1, Int_ 2])
+    prog `shouldBeSuccess` expected

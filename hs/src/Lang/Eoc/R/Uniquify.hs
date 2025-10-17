@@ -1,5 +1,7 @@
 module Lang.Eoc.R.Uniquify where
 
+import Debug.Trace (trace)
+
 import Control.Exception (throw)
 
 import Lang.Eoc.Types
@@ -11,7 +13,7 @@ uniquify (RDefsProgram info defs) = do
   return $ RDefsProgram info defs'
   where
     uniquifyDef (Def info name args retTy body) =
-      Def info name args retTy <$> uniquifyExp [] body
+      Def info name args retTy <$> uniquifyExp (map ((\v -> (v, v)) . fst) args) body
 
 type NamesEnv = [(Var, Var)]
 

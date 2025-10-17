@@ -59,7 +59,7 @@ parseExp (List [Symbol "get!", Symbol v]) =
   GetBang v
 parseExp (List (Symbol op:args))
   | Just op' <- parsePrimOp op = Prim op' (map parseExp args)
-  | otherwise = throw $ MyException $ "unknown operator: " ++ op
+  | otherwise = Apply (Var op) (map parseExp args)
 parseExp sexp = throw $ MyException $ "cannot parse expression: " ++ show sexp
 
 splitAtLast :: [a] -> ([a], a)

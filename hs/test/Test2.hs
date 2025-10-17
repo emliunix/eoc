@@ -12,7 +12,6 @@ import Lang.Eoc.Types
 import Lang.Eoc.R
 import Lang.Eoc.Parser (parseRfromString')
 
-import Control.Monad ( (>=>) )
 import Lang.Eoc.C (explicateControl, placeBlocks, mergeBlocks)
 
 data Passes a b where
@@ -45,6 +44,7 @@ mySpec2 = do
   mySpec3
   mySpecRWhile
   specPlaceBlocks
+  specFun
 
 mySpecRco :: Spec
 mySpecRco = describe "Test rco" $ do
@@ -142,4 +142,27 @@ specPlaceBlocks = describe "BlockPlacement" $ do
     \& (let ([y (read)])
     \&   (let ([x (if (== y 0) 40 777)])
     \&     (+ x 2)))
+    \&"""
+
+
+specFun :: Spec
+specFun = describe "Function Tests" $ do
+  it "compiles functions" $ do
+    test example
+  where
+    test = compile passes
+    passes = InitialPass ("shrink", shrink)
+      :> ("uniquify", uniquify)
+      :> ("revealFunctions", revealFunctions)
+      :> ("uncoverGet", uncoverGet)
+      :> ("removeComplexOperands", removeComplexOperands)
+      :> ("explicateControl", explicateControl)
+      :> ("placeBlocks", placeBlocks)
+      :> ("mergeBlocks", mergeBlocks)
+    example = parseRfromString' """
+    \&(define (double [x: Int]) : Int
+    \&  (+ x x))
+    \& 
+    \&(let ([a 10])
+    \&  (double a))
     \&"""
