@@ -31,7 +31,7 @@ library eoc
                     , Lang.Eoc.R.UncoverGet
                     , Lang.Eoc.R.Rco
                     , Lang.Eoc.R.RevealFunctions
-                    , Lang.Eoc.Typecheck
+                    , Lang.Eoc.R.Typecheck
                     , Lang.Eoc.C
                     , Lang.Eoc.C.Types
                     , Lang.Eoc.C.ExplicateControl

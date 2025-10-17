@@ -149,9 +149,11 @@ specFun :: Spec
 specFun = describe "Function Tests" $ do
   it "compiles functions" $ do
     test example
+    test example2
   where
     test = compile passes
-    passes = InitialPass ("shrink", shrink)
+    passes = InitialPass ("typeCheckPass", typeCheckPass)
+      :> ("shrink", shrink)
       :> ("uniquify", uniquify)
       :> ("revealFunctions", revealFunctions)
       :> ("uncoverGet", uncoverGet)
@@ -165,4 +167,12 @@ specFun = describe "Function Tests" $ do
     \& 
     \&(let ([a 10])
     \&  (double a))
+    \&"""
+    example2 = parseRfromString' """
+    \&(define (fib-go [n: Int] [a: Int] [b: Int]) : Int
+    \&  (if (<= n 0)
+    \&      a
+    \&      (fib-go (- n 1) b (+ a b))))
+    \&(define (fib [x: Int]) : Int (fib-go x 0 1))
+    \&(fib 10)
     \&"""

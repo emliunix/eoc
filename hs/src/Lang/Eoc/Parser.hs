@@ -4,7 +4,7 @@ import Control.Exception (throw)
 import Text.Trifecta (Result (..))
 
 import Lang.Eoc.Sexp
-import Lang.Eoc.Types (MyException(..), parsePrimOp)
+import Lang.Eoc.Types (MyException(..), parsePrimOp, PrimOp(..))
 import Lang.Eoc.R.Types
 
 parseR :: [Sexp] -> RDefsExp
@@ -58,6 +58,10 @@ parseExp (List [Symbol "set!", Symbol v, e]) =
 parseExp (List [Symbol "get!", Symbol v]) =
   GetBang v
 parseExp (List (Symbol op:args))
+  | op == "-" = case args of
+      [e] -> Prim PrimNeg [parseExp e]
+      [e1, e2] -> Prim PrimSub [parseExp e1, parseExp e2]
+      _ -> throw $ MyException $ "invalid number of arguments to -: " ++ show (length args)
   | Just op' <- parsePrimOp op = Prim op' (map parseExp args)
   | otherwise = Apply (Var op) (map parseExp args)
 parseExp sexp = throw $ MyException $ "cannot parse expression: " ++ show sexp

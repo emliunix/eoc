@@ -1,4 +1,4 @@
-module Lang.Eoc.Typecheck where
+module Lang.Eoc.R.Typecheck where
 
 import Control.Monad.Except (Except, runExcept, throwError)
 import Control.Exception (throw)
@@ -6,20 +6,28 @@ import Control.Exception (throw)
 import Lang.Eoc.Types
 import Lang.Eoc.R.Types
 
-typeCheck :: RDefs -> RDefs
-typeCheck (RDefsProgram info defs) =
+typeCheckPass :: RDefsExp -> PassM RDefsExp
+typeCheckPass defsExp = return $ typeCheck defsExp
+
+typeCheck :: RDefsExp -> RDefsExp
+typeCheck (RDefsExpProgram info defs exp) =
   let
     defTy (Def _ name args retTy _) = (name, TyFun (map snd args) retTy)
-    defsTy = map defTy defs
+    topEnv = map defTy defs
     tyckDef (Def info name args retTy body) =
-      let (body', bodyTy) = typeCheckExp (args ++ defsTy) body
+      let (body', bodyTy) = typeCheckExp (args ++ topEnv) body
       in throwExcept $ do
         check (bodyTy == retTy) $
           "Type mismatch in function " ++ name ++ ": expected " ++ show retTy ++
            ", but got " ++ show bodyTy
         return $ Def info name args retTy body'
     defs' = map tyckDef defs
-  in RDefsProgram info defs'
+    exp'' = throwExcept $ do
+      let (exp', expTy) = typeCheckExp topEnv exp
+      check (expTy == TyInt) $
+        "Type of program expression must be Int, but got " ++ show expTy
+      return exp'
+  in RDefsExpProgram info defs' exp''
 
 type Env = [(Var, Ty)]
 
@@ -52,15 +60,15 @@ typeCheckExp env (If cond thn els) =
       (thn', thnTy) = typeCheckExp env thn
       (els', elsTy) = typeCheckExp env els
   in throwExcept $ do
-    check (condTy /= TyBool) $ "Condition of if must be Bool, but got " ++ show condTy
-    check (thnTy /= elsTy) $ "Branches of if must have the same type," ++
+    check (condTy == TyBool) $ "Condition of if must be Bool, but got " ++ show condTy
+    check (thnTy == elsTy) $ "Branches of if must have the same type," ++
       " but got " ++ show thnTy ++ " and " ++ show elsTy
     return (If cond' thn' els', thnTy)
 typeCheckExp env (SetBang var exp) =
   let expTy = lookupEnv var env
       (exp', expTy') = typeCheckExp env exp
   in throwExcept $ do
-    check (expTy /= expTy') $ "Type mismatch in set!, variable " ++ var ++
+    check (expTy == expTy') $ "Type mismatch in set!, variable " ++ var ++
       " has type " ++ show expTy ++ ", but got " ++ show expTy'
     return (SetBang var exp', TyUnit)
 typeCheckExp env (GetBang var) =
@@ -74,8 +82,8 @@ typeCheckExp env (While cond body) =
   let (cond', condTy) = typeCheckExp env cond
       (body', bodyTy) = typeCheckExp env body
   in throwExcept $ do
-    check (condTy /= TyBool) $ "Condition of while must be Bool, but got " ++ show condTy
-    check (bodyTy /= TyUnit) $ "Body of while must be Unit, but got " ++ show bodyTy
+    check (condTy == TyBool) $ "Condition of while must be Bool, but got " ++ show condTy
+    check (bodyTy == TyUnit) $ "Body of while must be Unit, but got " ++ show bodyTy
     return (While cond' body', TyUnit)
 typeCheckExp env (Apply fun args) =
   let (args', argsTy) = unzip $ map (typeCheckExp env) args
@@ -117,3 +125,4 @@ throwExcept ex = case runExcept ex of
 check :: Bool -> String -> Except String ()
 check True _ = return ()
 check False ~msg = throwError msg
+
