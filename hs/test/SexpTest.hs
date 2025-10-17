@@ -67,7 +67,7 @@ sexpTestSpec = describe "S-expression Parser Tests" $ do
   it "parses to R" $ do
     let input = "(let ([x 10]) (if #t (+ x 1) (- x 1)))"
         result = parseRfromString input
-        expectedR = Program Info $
+        expectedR = RDefsExpProgram Info [] $
           Let "x" (Int_ 10)
           (If (Bool_ True)
             (Prim PrimPlus [Var "x", Int_ 1])

@@ -7,8 +7,35 @@ import Lang.Eoc.Sexp
 import Lang.Eoc.Types (MyException(..), parsePrimOp)
 import Lang.Eoc.R.Types
 
-parseR :: Sexp -> R
-parseR s = Program Info (parseExp s)
+parseR :: [Sexp] -> RDefsExp
+parseR sexps = RDefsExpProgram Info defs' exp
+  where
+    go [] _ = throw $ MyException "no expression found"
+    go [sexp] defs = (reverse defs, parseExp sexp)
+    go (x:xs) defs = go xs (parseDef x : defs)
+    (defs', exp) = go sexps []
+
+parseDef :: Sexp -> Def
+parseDef (List [Symbol "define", List (Symbol name:args), Colon, retTy, body]) =
+  Def DefInfo name args' retTy' body'
+  where
+    retTy' = parseTy retTy
+    body' = parseExp body
+    args' = map parseArg args
+    parseArg (List [Symbol v, Colon, ty])
+      | ty' <- parseTy ty = (v, ty')
+    parseArg sexp = throw $ MyException $ "cannot parse argument: " ++ show sexp
+parseDef sexp = throw $ MyException $ "cannot parse definition: " ++ show sexp
+
+parseTy :: Sexp -> Ty
+parseTy (Symbol "Int") = TyInt
+parseTy (Symbol "Bool") = TyBool
+parseTy (Symbol "Unit") = TyUnit
+parseTy (List (ty:Symbol "->":xs)) =
+  case parseTy (List xs) of
+    TyFun args ret -> TyFun (parseTy ty : args) ret
+    ret -> TyFun [parseTy ty] ret
+parseTy sexp = throw $ MyException $ "cannot parse type: " ++ show sexp
 
 parseExp :: Sexp -> Exp
 parseExp (Integer i) = Int_ $ fromIntegral i
@@ -42,12 +69,12 @@ splitAtLast (x:xs) =
   let (xs', z) = splitAtLast xs
   in (x:xs', z)
 
-parseRfromString :: String -> Result R
-parseRfromString input = case parseSexpFromString input of
-  Success exp -> Success $ parseR exp
+parseRfromString :: String -> Result RDefsExp
+parseRfromString input = case parseSexpsFromString input of
+  Success exps -> Success $ parseR exps
   Failure failure -> Failure failure
 
-parseRfromString' :: String -> R
+parseRfromString' :: String -> RDefsExp
 parseRfromString' input = case parseRfromString input of
   Success r -> r
   Failure err -> throw $ MyException $ "parse error: " ++ show err

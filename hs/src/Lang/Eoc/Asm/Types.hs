@@ -136,6 +136,7 @@ data Instr
   | IcondBranch BranchCond String
   | Icall String
   | Ilabel String Instr
+  | Iret
   deriving (Eq)
 
 noop :: Instr
@@ -174,6 +175,7 @@ instance Show Instr where
   show (Icall func)           = "    call    " ++ func
   show (Ilabel lbl instr)     = lbl ++ ":\n" ++
                                 show instr
+  show Iret                    = "    ret"
 
 instance Show BranchCond where
   show (Beq a b)  = "beq     " ++ show a ++ ", " ++ show b
@@ -220,7 +222,8 @@ readLocs instr = case instr of
   Ibranch _        -> Set.empty
   IcondBranch _ _  -> Set.empty
   Icall _          -> Set.empty  -- TODO: consider argument registers (A0–A7)
-
+  Iret             -> Set.empty
+  
 writeLocs :: Instr -> Set Arg
 writeLocs (Ilabel _ instr) = writeLocs instr
 writeLocs instr = case instr of
@@ -249,6 +252,7 @@ writeLocs instr = case instr of
   Ibranch _        -> Set.empty
   IcondBranch _ _  -> Set.empty
   Icall _          -> locs' [ArgReg A0] -- return register
+  Iret             -> Set.empty
 
 liveBefore :: Instr -> Set Arg -> Set Arg
 liveBefore instr s = s & flip Set.difference (writeLocs instr) & Set.union (readLocs instr)
@@ -304,4 +308,4 @@ replaceVars m instr =
             Blt a b -> Blt (re a) (re b)
             Bge a b -> Bge (re a) (re b)
       in IcondBranch cond' lbl
-    Ibranch _; Icall _ -> instr
+    Ibranch _; Icall _; Iret -> instr

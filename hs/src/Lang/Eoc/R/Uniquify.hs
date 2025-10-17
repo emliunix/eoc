@@ -5,10 +5,13 @@ import Control.Exception (throw)
 import Lang.Eoc.Types
 import Lang.Eoc.R.Types
 
-uniquify :: R -> PassM R
-uniquify (Program info exp) = do
-  exp' <- uniquifyExp [] exp
-  return $ Program info exp'
+uniquify :: RDefs -> PassM RDefs
+uniquify (RDefsProgram info defs) = do
+  defs' <- traverse uniquifyDef defs 
+  return $ RDefsProgram info defs'
+  where
+    uniquifyDef (Def info name args retTy body) =
+      Def info name args retTy <$> uniquifyExp [] body
 
 type NamesEnv = [(Var, Var)]
 

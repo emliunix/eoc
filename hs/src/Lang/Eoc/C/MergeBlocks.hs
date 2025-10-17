@@ -45,6 +45,10 @@ merge blocks =
           _ -> (lbl, blk) : go xs
   in go blocks
 
-mergeBlocks :: C -> PassM C
-mergeBlocks (CProgram info blocks) =
-  return $ CProgram info (merge blocks)
+mergeBlocks :: CDefs -> PassM CDefs
+mergeBlocks (CDefsProgram info defs) =
+  CDefsProgram info <$> defs'
+  where
+    defs' = traverse mergeDef defs
+    mergeDef (CDef info name args rty blocks) =
+      return $ CDef info name args rty (merge blocks)

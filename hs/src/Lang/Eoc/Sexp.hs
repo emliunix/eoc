@@ -10,6 +10,7 @@ data Sexp
   | Integer Integer
   | Bool Bool
   | Nil
+  | Colon
   | String String
   | List [Sexp]
   deriving (Show, Eq)
@@ -46,6 +47,12 @@ parseNil = do
   _ <- string "'()"
   return Nil
 
+-- | Parse a colon (:)
+parseColon :: Parser Sexp
+parseColon = do
+  _ <- char ':'
+  return Colon
+
 -- | Parse a string literal
 parseStringLiteral :: Parser Sexp
 parseStringLiteral = do
@@ -72,10 +79,11 @@ whitespace = skipMany (try whitespaceChar <|> comment)
 -- | Parse an atom (symbol, integer, bool, nil, or string)
 parseAtom :: Parser Sexp
 parseAtom = try parseNil
-        <|> try parseBool
-        <|> try parseInteger
-        <|> try parseStringLiteral
-        <|> parseSymbol
+  <|> try parseColon
+  <|> try parseBool
+  <|> try parseInteger
+  <|> try parseStringLiteral
+  <|> parseSymbol
 
 -- | Parse a list of s-expressions
 parseList :: Parser Sexp

@@ -1,15 +1,25 @@
 module Lang.Eoc.Typecheck where
 
+import Control.Monad.Except (Except, runExcept, throwError)
 import Control.Exception (throw)
-import Data.Function ((&))
 
 import Lang.Eoc.Types
-import Lang.Eoc.R
+import Lang.Eoc.R.Types
 
-typeCheck :: R -> (R, Ty)
-typeCheck (Program info exp) =
-  let (exp', ty) = typeCheckExp [] exp
-  in (Program info exp', ty)
+typeCheck :: RDefs -> RDefs
+typeCheck (RDefsProgram info defs) =
+  let
+    defTy (Def _ name args retTy _) = (name, TyFun (map snd args) retTy)
+    defsTy = map defTy defs
+    tyckDef (Def info name args retTy body) =
+      let (body', bodyTy) = typeCheckExp (args ++ defsTy) body
+      in throwExcept $ do
+        check (bodyTy == retTy) $
+          "Type mismatch in function " ++ name ++ ": expected " ++ show retTy ++
+           ", but got " ++ show bodyTy
+        return $ Def info name args retTy body'
+    defs' = map tyckDef defs
+  in RDefsProgram info defs'
 
 type Env = [(Var, Ty)]
 
@@ -38,23 +48,21 @@ typeCheckExp env (Prim op args) =
     ty = typeCheckPrimOp op tys
   in (Prim op args', ty)
 typeCheckExp env (If cond thn els) =
-  let (cond', _) = typeCheckExp env cond &
-        expectTy (\ty -> ty == TyBool || throw (
-                     MyException $ "Condition of if must be Bool, but got " ++ show ty))
+  let (cond', condTy) = typeCheckExp env cond
       (thn', thnTy) = typeCheckExp env thn
-      (els', _) = typeCheckExp env els &
-        expectTy (\elsTy -> elsTy == thnTy || throw (
-                     MyException $ "Branches of if must have the same type," ++
-                     " but got " ++ show thnTy ++ " and " ++ show elsTy))
-  in (If cond' thn' els', thnTy)
+      (els', elsTy) = typeCheckExp env els
+  in throwExcept $ do
+    check (condTy /= TyBool) $ "Condition of if must be Bool, but got " ++ show condTy
+    check (thnTy /= elsTy) $ "Branches of if must have the same type," ++
+      " but got " ++ show thnTy ++ " and " ++ show elsTy
+    return (If cond' thn' els', thnTy)
 typeCheckExp env (SetBang var exp) =
   let expTy = lookupEnv var env
-      (exp', _) = typeCheckExp env exp &
-        expectTy (\ty -> ty == expTy || throw (
-                     MyException $ "Type mismatch in set!, variable " ++ var ++
-                     " has type " ++ show expTy ++
-                     ", but got " ++ show ty))
-  in (SetBang var exp', TyUnit)
+      (exp', expTy') = typeCheckExp env exp
+  in throwExcept $ do
+    check (expTy /= expTy') $ "Type mismatch in set!, variable " ++ var ++
+      " has type " ++ show expTy ++ ", but got " ++ show expTy'
+    return (SetBang var exp', TyUnit)
 typeCheckExp env (GetBang var) =
   let ty = lookupEnv var env
   in (GetBang var, ty)
@@ -63,14 +71,23 @@ typeCheckExp env (Begin exps body) =
       (body', bodyTy) = typeCheckExp env body
   in (Begin exps' body', bodyTy)
 typeCheckExp env (While cond body) =
-  let (cond', _) = typeCheckExp env cond &
-        expectTy (\ty -> ty == TyBool || throw (
-                     MyException $ "Condition of while must be Bool, but got " ++ show ty))
-      (body', _) = typeCheckExp env body
-  in (While cond' body', TyUnit)
-
-expectTy :: (Ty -> Bool) -> (Exp, Ty) -> (Exp, Ty)
-expectTy p t@(_, ty) = p ty `seq` t
+  let (cond', condTy) = typeCheckExp env cond
+      (body', bodyTy) = typeCheckExp env body
+  in throwExcept $ do
+    check (condTy /= TyBool) $ "Condition of while must be Bool, but got " ++ show condTy
+    check (bodyTy /= TyUnit) $ "Body of while must be Unit, but got " ++ show bodyTy
+    return (While cond' body', TyUnit)
+typeCheckExp env (Apply fun args) =
+  let (args', argsTy) = unzip $ map (typeCheckExp env) args
+      (fun', funTy) = typeCheckExp env fun
+  in throwExcept $ do
+    case funTy of
+      TyFun argsTy' retTy -> do
+        check (argsTy == argsTy') $ "Function argument type mismatch: expected " ++
+          show argsTy' ++ ", but got " ++ show argsTy
+        return (Apply fun' args', retTy)
+      _ -> throwError $ "Expected function type, but got " ++ show funTy
+typeCheckExp _ t@(FunRef _) = throw $ MyException $ "Unexpected internal FunRef: " ++ show t
 
 typeCheckPrimOp :: PrimOp -> [Ty] -> Ty
 typeCheckPrimOp PrimRead   [] = TyInt
@@ -78,6 +95,10 @@ typeCheckPrimOp PrimNeg    [TyInt] = TyInt
 typeCheckPrimOp PrimPlus   [TyInt, TyInt] = TyInt
 typeCheckPrimOp PrimSub    [TyInt, TyInt] = TyInt
 typeCheckPrimOp PrimEq     [TyInt, TyInt] = TyBool
+typeCheckPrimOp PrimEq     [TyBool, TyBool] = TyBool
+typeCheckPrimOp PrimEq     [TyUnit, TyUnit] = TyBool
+typeCheckPrimOp PrimNe     [TyInt, TyInt] = TyBool
+typeCheckPrimOp PrimNe     [TyBool, TyBool] = TyBool
 typeCheckPrimOp PrimLt     [TyInt, TyInt] = TyBool
 typeCheckPrimOp PrimLe     [TyInt, TyInt] = TyBool
 typeCheckPrimOp PrimGt     [TyInt, TyInt] = TyBool
@@ -85,4 +106,14 @@ typeCheckPrimOp PrimGe     [TyInt, TyInt] = TyBool
 typeCheckPrimOp PrimAnd    [TyBool, TyBool] = TyBool
 typeCheckPrimOp PrimOr     [TyBool, TyBool] = TyBool
 typeCheckPrimOp PrimNot    [TyBool] = TyBool
+-- TODO: type check vector
 typeCheckPrimOp op         argTys = throw $ MyException $ "Type error in primitive operation: " ++ show op ++ " with args " ++ show argTys
+
+throwExcept :: Except String a -> a
+throwExcept ex = case runExcept ex of
+  Left msg -> throw $ MyException msg
+  Right val -> val
+
+check :: Bool -> String -> Except String ()
+check True _ = return ()
+check False ~msg = throwError msg

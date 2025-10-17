@@ -5,16 +5,12 @@ And the real effect is to simply put the then branch right after the if conditio
 
 And since if (while compiles to if too) is the majority source of blocks.
 The algorithm now works just for if.
-
 -}
 module Lang.Eoc.C.PlaceBlocks
   ( placeBlocks
   ) where
 
-import Control.Exception (throw)
-
 import Data.Maybe (catMaybes)
-import Data.Graph (Graph)
 import qualified Data.Graph as Graph
 
 import Lang.Eoc.Types
@@ -36,5 +32,10 @@ rpoBlocks entry blocks =
     | (t, l, _) <- map nodeFromVertex $ reverse $ postOrder tree
     ]
 
-placeBlocks :: C -> PassM C
-placeBlocks (CProgram info blocks) = return $ CProgram info $ rpoBlocks "start" blocks
+placeBlocks :: CDefs -> PassM CDefs
+placeBlocks (CDefsProgram info defs) =
+  CDefsProgram info <$> defs'
+  where
+    defs' = traverse placeDef defs
+    placeDef (CDef info name args rty blocks) =
+      return $ CDef info name args rty (rpoBlocks "start" blocks)

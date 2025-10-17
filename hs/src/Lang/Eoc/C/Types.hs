@@ -5,6 +5,8 @@ import Control.Monad.Trans (MonadTrans(..))
 import Control.Monad.State (StateT(..), gets, modify)
 import Control.Monad.State.Class (MonadState)
 
+import Data.List (intercalate)
+
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -26,31 +28,41 @@ instance Show CAtm where
   show CUnit = "'()"
   show (CVar v) = v
 
-data CExp = CAtm CAtm | CPrim PrimOp [CAtm]
+data CExp = CAtm CAtm | CPrim PrimOp [CAtm] | CFunRef Var | CCall CAtm [CAtm]
 
 instance Show CExp where
   show (CAtm atm) = show atm
   show (CPrim op args) = "(" ++ show op ++ " " ++ (unwords . map show $ args) ++ ")"
+  show (CFunRef var) = "<funref " ++ var ++ ">"
+  show (CCall fn args) = "(" ++ show fn ++ " " ++ (unwords . map show $ args) ++ ")"
 
 data Stmt
   = Assign Var CExp
   | StmtPrim PrimOp [CAtm]
+  | StmtCall CAtm [CAtm]
 
 instance Show Stmt where
   show (Assign var exp) = "  " ++ var ++ " = " ++ show exp
   show (StmtPrim op args) = "  " ++ unwords (show op : map show args)
+  show (StmtCall fn args) = "   (" ++ show fn ++ " " ++ unwords (map show args) ++ ")"
 
 data Tail
   = Return CExp
+  -- | TailCall CAtm [CAtm]
   | Seq Stmt Tail
   | Goto Label
   | IfStmt PrimOp CAtm CAtm Tail Tail
 
 instance Show Tail where
   show (Return exp) = "  return " ++ show exp
+  -- show (TailCall fn args) = "  (" ++ show fn ++ " " ++ unwords (map show args) ++ ")"
   show (Seq stmt tail) = show stmt ++ "\n" ++ show tail
   show (Goto lbl) = "  goto "++ lbl
-  show (IfStmt cmp a b thn els) = "  if (" ++ unwords [show cmp, show a, show b]  ++ ") " ++ show thn ++ " " ++ show els
+  show (IfStmt cmp a b thn els) =
+    let cmpab = unwords [show cmp, show a, show b]
+    in case (thn, els) of
+      (Goto thn', Goto els') -> "  if (" ++ cmpab  ++ ") then goto " ++ thn' ++ " else goto " ++ els'
+      _ -> "  __invalid if (" ++ cmpab ++ ") then {\n" ++ show thn ++ "\n  } else {\n" ++ show els ++ "\n  }"
 
 data CInfo = CInfo { }
   deriving (Show)
@@ -59,9 +71,27 @@ type Label = String
 
 data C = CProgram CInfo [(Label, Tail)]
 
+data CDefInfo = CDefInfo { }
+  deriving (Show)
+
+data CDef = CDef CDefInfo Var [(Var, CType)] CType [(Label, Tail)]
+
+data CDefs = CDefsProgram CInfo [CDef]
+
 instance Show C where
   show (CProgram _ tails) =
     unlines $ map (\(lbl, tail) -> lbl ++ ":\n" ++ show tail) tails
+
+instance Show CDef where
+  show (CDef _ name args retTy tails) =
+    let body = unlines $ map (\(lbl, tail) -> lbl ++ ":\n" ++ show tail) tails
+        args' = (intercalate "," $ map (\(v, ty) -> v ++ ": " ++ show ty) args)
+        header = name ++ "(" ++ args' ++ ") -> " ++ show retTy
+    in header ++ "\n" ++ body
+
+instance Show CDefs where
+  show (CDefsProgram _ defs) =
+    unlines $ map show defs
 
 data CPassState = CPassState
   { blocks :: Map Label Tail

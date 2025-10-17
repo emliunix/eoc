@@ -24,11 +24,16 @@ scanSetExp (While cond body) =
   Set.union (scanSetExp cond) (scanSetExp body)
 scanSetExp _ = Set.empty
 
-uncoverGet :: R -> PassM R
-uncoverGet (Program info exp) =
-  let setVars = scanSetExp exp
-      exp' = uncoverGetExp setVars exp
-  in return $ Program info exp'
+uncoverGet :: RDefs -> PassM RDefs
+uncoverGet (RDefsProgram info defs) =
+  return $ RDefsProgram info defs'
+  where
+    goDef (Def info name args ty exp) =
+      Def info name args ty (uncoverGetExp setVars exp)
+      where
+        setVars = scanSetExp exp
+        exp' = uncoverGetExp setVars exp
+    defs' = map goDef defs
 
 uncoverGetExp :: Set Var -> Exp -> Exp
 uncoverGetExp setVars =

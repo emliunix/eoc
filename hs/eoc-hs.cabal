@@ -30,6 +30,7 @@ library eoc
                     , Lang.Eoc.R.Shrink
                     , Lang.Eoc.R.UncoverGet
                     , Lang.Eoc.R.Rco
+                    , Lang.Eoc.R.RevealFunctions
                     , Lang.Eoc.Typecheck
                     , Lang.Eoc.C
                     , Lang.Eoc.C.Types
@@ -43,6 +44,7 @@ library eoc
                     , Lang.Eoc.Asm.Interferences
                     , Lang.Eoc.Asm.AllocateRegisters
                     , Lang.Eoc.Asm.PatchInstructions
+                    , Lang.Eoc.Asm.PreludeConclusion
                     , Lang.Eoc.Free
                     , Lang.Eoc.Types
     build-depends:    base

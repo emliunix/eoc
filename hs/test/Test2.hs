@@ -51,8 +51,8 @@ mySpecRco = describe "Test rco" $ do
   it "compiles rco example" $ do
     compile passes example `shouldReturn` ()
   where
-    passes = InitialPass ("uniquify", uniquify)
-      :> ("shrink", shrink)
+    passes = InitialPass ("shrink", shrink)
+      :> ("uniquify", uniquify)
       :> ("uncoverGet", uncoverGet)
       :> ("removeComplexOperands", removeComplexOperands)
     example = parseRfromString' "(let ([x 10]) (begin (set! x (+ x 1)) x))"
@@ -65,8 +65,8 @@ mySpec3 = describe "Test explicate-control" $ do
     test example3 `shouldReturn` ()
     test example4 `shouldReturn` ()
   where
-    passes = InitialPass ("uniquify", uniquify)
-      :> ("shrink", shrink)
+    passes = InitialPass ("shrink", shrink)
+      :> ("uniquify", uniquify)
       :> ("uncoverGet", uncoverGet)
       :> ("removeComplexOperands", removeComplexOperands)
       :> ("explicateControl", explicateControl)
@@ -100,8 +100,8 @@ mySpecRWhile = describe "R_while" $ do
   it "example compiles" $ do
     test example5 `shouldReturn` ()
   where
-    passes = InitialPass ("uniquify", uniquify)
-      :> ("shrink", shrink)
+    passes = InitialPass ("shrink", shrink)
+      :> ("uniquify", uniquify)
       :> ("uncoverGet", uncoverGet)
       :> ("removeComplexOperands", removeComplexOperands)
       :> ("explicateControl", explicateControl)
@@ -125,8 +125,8 @@ specPlaceBlocks = describe "BlockPlacement" $ do
     test example `shouldReturn` ()
     test example2 `shouldReturn` ()
   where
-    passes = InitialPass ("uniquify", uniquify)
-      :> ("shrink", shrink)
+    passes = InitialPass ("shrink", shrink)
+      :> ("uniquify", uniquify)
       :> ("uncoverGet", uncoverGet)
       :> ("removeComplexOperands", removeComplexOperands)
       :> ("explicateControl", explicateControl)

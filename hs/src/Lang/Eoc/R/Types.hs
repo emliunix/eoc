@@ -1,3 +1,4 @@
+{-# LANGUAGE OrPatterns #-}
 module Lang.Eoc.R.Types where
 
 import Control.Exception (throw)
@@ -22,6 +23,21 @@ data R
   = Program Info Exp
   deriving (Show, Eq)
 
+data DefInfo = DefInfo { }
+  deriving (Show, Eq)
+
+data Def
+  = Def DefInfo Var [(Var, Ty)] Ty Exp
+  deriving (Show, Eq)
+
+data RDefsExp
+  = RDefsExpProgram Info [Def] Exp
+  deriving (Show, Eq)
+
+data RDefs
+  = RDefsProgram Info [Def]
+  deriving (Show, Eq)
+
 data Exp
   = Int_ Int
   | Bool_ Bool
@@ -34,6 +50,8 @@ data Exp
   | GetBang Var
   | Begin [Exp] Exp
   | While Exp Exp
+  | Apply Exp [Exp]
+  | FunRef Var
   deriving (Eq)
 
 instance Show Exp where
@@ -51,6 +69,8 @@ instance Show Exp where
   show (GetBang var) = "(get! " ++ var ++ ")"
   show (Begin exps body) = "(begin " ++ (unwords . map show $ exps) ++ " " ++ show body ++ ")"
   show (While cond body) = "(while " ++ show cond ++ " " ++ show body ++ ")"
+  show (Apply fun args) = "(" ++ show fun ++ " " ++ (unwords . map show $ args) ++ ")"
+  show (FunRef fun) = "@" ++ fun
 
 recurExp :: (Exp -> Exp) -> Exp -> Exp
 recurExp recur (Prim op args) = Prim op (map recur args)
@@ -59,7 +79,8 @@ recurExp recur (If cond thn els) = If (recur cond) (recur thn) (recur els)
 recurExp recur (SetBang var exp) = SetBang var (recur exp)
 recurExp recur (Begin exps body) = Begin (map recur exps) (recur body)
 recurExp recur (While cond body) = While (recur cond) (recur body)
-recurExp _ t = t
+recurExp recur (Apply fun args) = Apply (recur fun) (map recur args)
+recurExp _ t@(Int_ _; Bool_ _; Unit_; Var _; GetBang _; FunRef _) = t
 
 recurExpM :: Monad m => (Exp -> m Exp) -> Exp -> m Exp
 recurExpM recur (Prim op args) = Prim op <$> mapM recur args
@@ -68,4 +89,5 @@ recurExpM recur (If cond thn els) = If <$> recur cond <*> recur thn <*> recur el
 recurExpM recur (SetBang var exp) = SetBang var <$> recur exp
 recurExpM recur (Begin exps body) = Begin <$> mapM recur exps <*> recur body
 recurExpM recur (While cond body) = While <$> recur cond <*> recur body
-recurExpM _ t = return t
+recurExpM recur (Apply fun args) = Apply <$> recur fun <*> mapM recur args
+recurExpM _ t@(Int_ _; Bool_ _; Unit_; Var _; GetBang _; FunRef _) = return t

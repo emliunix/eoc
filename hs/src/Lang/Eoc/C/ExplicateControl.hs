@@ -1,4 +1,5 @@
-{-|
+module Lang.Eoc.C.ExplicateControl where
+{-^
 
 The explicate-control pass.
 
@@ -46,11 +47,11 @@ Because evaluate the block may in term call `block` internally. So care should b
 This is guaranteed by `createBlock` which won't call the computation if the block is already created.
 
 -}
-module Lang.Eoc.C.ExplicateControl where
-
 import Control.Exception (throw)
 import Control.Monad (join)
 import Control.Monad.Trans (lift)
+
+import Data.Bifunctor (second)
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -58,6 +59,12 @@ import qualified Data.Map as Map
 import Lang.Eoc.Types
 import Lang.Eoc.R.Types
 import Lang.Eoc.C.Types
+
+ctype :: Ty -> CType
+ctype TyInt = CTyInt
+ctype TyBool = CTyBool
+ctype TyUnit = CTyUnit
+ctype ty = throw $ MyException $ "cannot convert to CType: " ++ show ty
 
 catm :: Exp -> CAtm
 catm (Int_ i) = CInt i
@@ -69,6 +76,8 @@ catm a = throw $ MyException $ "expected an atom, got " ++ show a
 
 cexpr :: Exp -> CExp
 cexpr (Prim op atms) = CPrim op $ map catm atms
+cexpr (FunRef f) = CFunRef f
+cexpr (Apply fun args) = CCall (catm fun) (map catm args)
 cexpr e = CAtm $ catm e
 
 freshBlock' :: CPass Label
@@ -88,6 +97,8 @@ explicateTail (If cond thn els) =
     <*> block (explicateTail els)
 explicateTail (Begin exps body) = explicateEffects exps $ explicateTail body
 explicateTail w@(While _ _) = explicateEffect w (explicateTail Unit_)
+-- explicateTail (Apply fun args) =
+--   return $ TailCall (catm fun) (map catm args)
 explicateTail expr = return $ Return $ cexpr expr
 
 explicateAssign :: Var -> Exp -> CPass Tail -> CPass Tail
@@ -132,10 +143,12 @@ explicateEffect expr cont =
     (Bool_ b) -> cont
     Unit_ -> cont
     (Var v) -> cont
+    (FunRef f) -> cont
     (GetBang v) -> cont
     -- except for read
     (Prim PrimRead []) -> Seq (StmtPrim PrimRead []) <$> cont
     (Prim op args) -> cont
+    (Apply fun args) -> Seq (StmtCall (catm fun) (map catm args)) <$> cont
     -- complex expressions
     (SetBang var e) -> explicateAssign var e cont
     (Let var e body) -> explicateAssign var e $ explicateEffect body cont
@@ -158,7 +171,14 @@ explicateEffect expr cont =
 explicateEffects :: [Exp] -> CPass Tail -> CPass Tail
 explicateEffects = flip $ foldr explicateEffect
 
-explicateControl :: R -> PassM C
-explicateControl (Program _ exp) = do
-  (tail, state) <- runCPass $ explicateTail exp
-  return $ CProgram (CInfo {}) (("start", tail) : Map.toList (blocks state))
+explicateControl :: RDefs -> PassM CDefs
+explicateControl (RDefsProgram _ defs) = do
+  CDefsProgram (CInfo {}) <$> traverse goDef defs
+  where
+    goDef (Def _ name args retTy body) = do
+      (tail, state) <- runCPass $ explicateTail body
+      let blocks' = ("start", tail) : Map.toList (blocks state)
+      return $ CDef CDefInfo name args' retTy' blocks'
+      where
+        args' = map (second ctype) args
+        retTy' = ctype retTy

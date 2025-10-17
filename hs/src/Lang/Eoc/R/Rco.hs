@@ -6,9 +6,14 @@ import Control.Exception (throw)
 import Lang.Eoc.Types 
 import Lang.Eoc.R.Types
 
-removeComplexOperands :: R -> PassM R
-removeComplexOperands (Program info exp) = do
-  Program info <$> rcoExpr exp
+removeComplexOperands :: RDefs -> PassM RDefs
+removeComplexOperands (RDefsProgram info defs) = do
+  defs' <- traverse goDef defs
+  return $ RDefsProgram info defs'
+  where
+    goDef (Def info name args retTy body) = do
+      body' <- rcoExpr body
+      return $ Def info name args retTy body'
 
 rcoExpr :: Exp -> PassM Exp
 -- we only need to handle Prim specially

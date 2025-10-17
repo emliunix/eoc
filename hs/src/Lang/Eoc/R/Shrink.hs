@@ -6,10 +6,14 @@ import Data.Function (fix)
 import Lang.Eoc.Types
 import Lang.Eoc.R.Types
 
-shrink :: R -> PassM R
-shrink (Program info exp) = do
-  let exp' = shrinkExp exp
-  return $ Program info exp'
+shrink :: RDefsExp -> PassM RDefs
+shrink (RDefsExpProgram info defs exp) =
+  let defs' = createMain exp : defs
+      defs'' = map shrinkDef defs'
+  in return $ RDefsProgram info defs''
+  where
+    shrinkDef (Def defInfo name args ty exp) =
+      Def defInfo name args ty (shrinkExp exp)
 
 shrinkExp :: Exp -> Exp
 shrinkExp =
@@ -19,17 +23,7 @@ shrinkExp =
      If (recur a) (recur b) (Bool_ False)
    handle recur (Prim PrimOr [a, b]) =
      If (recur a) (Bool_ True) (recur b)
-   handle recur (Prim op args) =
-     let args' = fmap recur args
-     in Prim op args'
    handle recur e = recurExp recur e
 
--- | Currently no primop shrink needs
-shrinkPrimOp :: PrimOp -> [Exp] -> Exp
--- shrinkPrimOp PrimNe [a, b] = Prim PrimNot [Prim PrimEq [a, b]]
--- shrinkPrimOp PrimLte [a, b] = Prim PrimNot [Prim PrimLt [b, a]]
--- shrinkPrimOp PrimGte [a, b] = Prim PrimNot [Prim PrimLt [a, b]]
--- shrinkPrimOp PrimGt [a, b] = Prim PrimLt [b, a]
--- shrinkPrimOp PrimSub [a, b] = Prim PrimPlus [a, Prim PrimNeg [b]]
--- shrinkPrimOp op args = Prim op args
-shrinkPrimOp = Prim
+createMain :: Exp -> Def
+createMain = Def (DefInfo { }) "main" [] TyInt

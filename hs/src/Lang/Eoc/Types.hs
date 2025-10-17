@@ -22,7 +22,6 @@ data PrimOp
   | PrimAnd -- pseudo
   | PrimOr -- pseudo
   | PrimNot -- pseudo, translated to xori
-  | PrimXori
   | PrimVector
   | PrimVectorLen
   deriving (Eq, Ord)
@@ -41,7 +40,6 @@ instance Show PrimOp where
   show PrimAnd = "and" -- pseudo
   show PrimOr = "or" -- pseudo
   show PrimNot = "not"
-  show PrimXori = "xori"
   show PrimVector = "vector"
   show PrimVectorLen = "vector-length"
 
