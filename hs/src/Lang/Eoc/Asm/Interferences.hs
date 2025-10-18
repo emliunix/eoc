@@ -51,6 +51,7 @@ buildInterferences (AsmDefsProgram info defs) =
       let
         livesMap = case aiLivesMap info of
           Just lm -> lm
-          Nothing -> throw $ MyException "Liveness information missing when building interference graph"
+          Nothing -> throw $ MyException
+            "Liveness information missing when building interference graph"
         interferenceGraph = buildInterferences' (splitBlocks instrs) livesMap
       in return $ AsmDef (info { aiInterferences = Just interferenceGraph }) name instrs

@@ -13,7 +13,16 @@ import Lang.Eoc.R
 import Lang.Eoc.Parser (parseRfromString')
 
 import Lang.Eoc.C (explicateControl, placeBlocks, mergeBlocks)
-import Lang.Eoc.Asm.SelectInstructions (selectInstructions)
+import Lang.Eoc.Asm
+  ( selectInstructions
+  , uncoverLives
+  , buildInterferences
+  , uncoverMoves
+  , allocateRegisters
+  , patchInstructions
+  , preludeConclusion
+  )
+
 
 data Passes a b where
   InitialPass :: (Show a) => (String, a -> PassM b) -> Passes a b
@@ -163,18 +172,24 @@ specFun = describe "Function Tests" $ do
       :> ("placeBlocks", placeBlocks)
       :> ("mergeBlocks", mergeBlocks)
       :> ("selectInstructions", selectInstructions)
+      :> ("uncoverLives", uncoverLives)
+      :> ("uncoverMoves", uncoverMoves)
+      :> ("buildInterferences", buildInterferences)
+      :> ("allocateRegisters", allocateRegisters)
+      :> ("patchInstructions", patchInstructions)
+      :> ("preludeConclusion", preludeConclusion)
     example = parseRfromString' """
     \&(define (double [x: Int]) : Int
     \&  (+ x x))
     \& 
-    \&(let ([a 10])
-    \&  (double a))
+    \&(let ([v 10])
+    \&  (double v))
     \&"""
     example2 = parseRfromString' """
     \&(define (fib-go [n: Int] [a: Int] [b: Int]) : Int
-    \&  (if (<= n 0)
-    \&      a
-    \&      (fib-go (- n 1) b (+ a b))))
+    \&  (if (> n 0)
+    \&      (fib-go (- n 1) b (+ a b))
+    \&      a))
     \&(define (fib [x: Int]) : Int (fib-go x 0 1))
     \&(fib 10)
     \&"""

@@ -1,5 +1,7 @@
 module Lang.Eoc.Asm.AllocateRegisters where
 
+import Debug.Trace (trace)
+
 import Control.Arrow ((&&&))
 import Control.Exception (throw)
 
@@ -40,18 +42,22 @@ index1stSaved = 12
 sizeSaved :: Int
 sizeSaved = 11
 
+isVar :: Arg -> Bool
+isVar (ArgVar _) = True
+isVar _ = False
+
 -- | dsatur graph coloring with move biasing
 dSatur :: (Ord t, Show t) =>
   Map t (Set t) -> -- ^ interference graph
   Map t Int -> -- ^ pre-colored variables
   Map t (Set t) -> -- ^ moves graph for move biasing
+  Set t ->
   Map t Int -- ^ all colored variables
-dSatur graph colorMap moves =
+dSatur graph colorMap moves nodes =
   go
-    (Map.fromList [(a, saturation colorMap a) | a <- uncolored])
+    (Map.fromList [(a, saturation colorMap a) | a <- Set.toList nodes, Map.notMember a colorMap])
     colorMap
   where
-    uncolored = [ k | k <- Map.keys graph, Map.notMember k colorMap ]
     saturation colorMap x =
       let adjs = Map.findWithDefault Set.empty x graph
       in mapMaybe (`Map.lookup` colorMap) (Set.toList adjs)
@@ -92,20 +98,33 @@ allocateRegisters (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse 
         movesGraph = case aiMoves info of
           Just mvs -> mvs
           Nothing -> throw $ MyException "no moves found in AsmInfo"
-        initialColors = Map.fromList $ zip (map ArgReg reservedRegs) (map negate [1..])
-        colors = dSatur interferenceGraph initialColors movesGraph
+        initialColors = Map.fromList $
+          zip (map ArgReg reservedRegs) (map negate [1..]) ++
+          zip (map ArgReg freeRegs) [0..]
+        vars = foldl go Set.empty instrs
+          where
+            go acc i =
+              Set.filter isVar (readLocs i) `Set.union`
+                Set.filter isVar (writeLocs i) `Set.union`
+                  acc
+        allColors = dSatur interferenceGraph initialColors movesGraph vars
+        colors = Map.filterWithKey (\k _ -> isVar k) allColors
+        msg = "Register allocation for " ++ name ++ ": " ++ show colors ++ ", graph: " ++ show interferenceGraph ++ "\n"
         maxCol = foldl max 0 $ Map.elems colors
-        stackSlots =
-          let nSlots = maxCol - length freeRegs
-          in if nSlots > 0
-             then map (\i -> ArgMemRef (i*8) SP) [0..nSlots]
-             else []
-        coloredSlots = map ArgReg freeRegs ++ stackSlots
-        stackSpace = ((16 + (length stackSlots * 8) + 15) `div` 16) * 16
         usedSavedRegs =
           let nUsed = min sizeSaved (max 0 (maxCol - index1stSaved))
           in take nUsed $ drop index1stSaved freeRegs
-        instrs' = map (replaceVars $ Map.map (coloredSlots !!) colors) instrs
+        stackSpillsOffset = 16 + length usedSavedRegs * 8
+        nSlots = max 0 $ maxCol - length freeRegs -- run out of registers
+        -- ra/s0 + saved regiters + spill slots
+        stackSpace = ((stackSpillsOffset + nSlots * 8 + 15) `div` 16) * 16
+        -- the stack slots
+        slots = map (\i -> ArgMemRef (stackSpace - stackSpillsOffset - i * 8) SP) [0..nSlots]
+        -- in color index, all registers and slots
+        color2Args = map ArgReg freeRegs ++ slots
+        -- replace variables with assigned registers/slots
+        var2args = Map.map (color2Args !!) $ Map.filter (>= 0) (trace msg colors)
+        instrs' = map (replaceVars var2args) instrs
         info' = info
           { aiStackSpace = Just stackSpace
           , aiUsedSavedRegs = Just usedSavedRegs

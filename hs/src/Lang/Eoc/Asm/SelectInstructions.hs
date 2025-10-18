@@ -92,7 +92,7 @@ selExp dst (CPrim PrimNot [a]) =
   [Ixori dst (selAtm a) (ArgImm 1)]
 selExp _ e@(CPrim _ _) =
   throw $ MyException $ "primop not implemented: " ++ show e
-selExp dst (CFunRef ref) = [Ila dst (ArgGlobal ref)]
+selExp dst (CFunRef ref) = [Ila dst (ArgGlobal (sanitifyName ref))]
 selExp dst (CCall fn args) =
   zipWith Pmv (map ArgReg argRegs) (map selAtm args) ++
   [ IindirectCall (selAtm fn) (length args)
@@ -101,9 +101,17 @@ selExp dst (CCall fn args) =
 
 selArgs :: [String] -> [Instr]
 selArgs xs =
-  reverse $ foldl mkMv [] $ zip xs argRegs
+   zipWith mkMv xs argRegs
   where
-    mkMv acc (src, reg) = Pmv (ArgReg reg) (ArgVar src) : acc
+    mkMv var reg = Pmv (ArgVar var) (ArgReg reg)
+
+sanitifyName :: String -> String
+sanitifyName = concatMap replaceChar
+  where
+    replaceChar c
+      | c `elem` allowedChars = [c]
+      | otherwise = "_"
+    allowedChars = ['a'..'z'] ++ ['A'..'Z']
 
 selectInstructions :: CDefs -> PassM AsmDefs
 selectInstructions (CDefsProgram info defs) = AsmDefsProgram emptyAsmInfo <$> traverse goDef defs
@@ -112,7 +120,7 @@ selectInstructions (CDefsProgram info defs) = AsmDefsProgram emptyAsmInfo <$> tr
       conclLbl <- ("conclusion" ++) . show <$> freshBlockId
       let asmDefInfo = emptyAsmDefInfo (startBlockLabel defInfo) conclLbl
       let instrs = concatMap (mkBlk conclLbl) blks
-      return $ AsmDef asmDefInfo name instrs
+      return $ AsmDef asmDefInfo (sanitifyName name) instrs
       where
         argsInstrs = selArgs (map fst args)
         startLbl = startBlockLabel defInfo

@@ -47,7 +47,7 @@ patchD d =
     ArgReg _ -> return d
     ArgMemRef _ _ -> do
       r' <- allocReg
-      modify $ \st -> st { stores = stores st ++ [Ist (ArgReg r') d] }
+      modify $ \st -> st { stores = stores st ++ [Isd (ArgReg r') d] }
       return (ArgReg r')
     _ -> throw $ MyException $ "unsupported dest arg in patchD: " ++ show d
 
@@ -149,7 +149,7 @@ patchInstrs (i:is) =
       where
         st = do
           s' <- patchS s
-          return [Ist s' d]
+          return [Isd s' d]
     Iadd d s0 s1 -> commBinImm Iadd Iaddi d s0 s1 ++ cont
     Iand d s0 s1 -> commBinImm Iand Iandi d s0 s1 ++ cont
     Ior d s0 s1 -> commBinImm Ior Iori d s0 s1 ++ cont

@@ -50,9 +50,11 @@ data AsmDef = AsmDef AsmDefInfo String [Instr]
 instance Show AsmDef where
   show (AsmDef info name instrs) =
     ".global " ++ name ++ "\n" ++
-    ".align 8\n" ++
+    ".p2align 4\n" ++
+    ".type " ++ name ++ ", @function\n" ++
     name ++ ":\n" ++
-    concatMap (\i -> show i ++ "\n") instrs
+    concatMap (\i -> show i ++ "\n") instrs ++ "\n"
+    ++ ".size " ++ name ++ ", .-" ++ name ++ "\n"
 
 data AsmDefs = AsmDefsProgram AsmInfo [AsmDef]
 
@@ -150,7 +152,7 @@ data Instr
   | Pmv Arg Arg
   | Ild Arg Arg
   | Ili Arg Arg
-  | Ist Arg Arg
+  | Isd Arg Arg
 
   | Iand Arg Arg Arg
   | Iandi Arg Arg Arg
@@ -191,7 +193,7 @@ instance Show Instr where
   show (Pmv d s)              = "    mv      " ++ show d ++ ", " ++ show s
   show (Ild d s)              = "    ld      " ++ show d ++ ", " ++ show s
   show (Ili d s)              = "    li      " ++ show d ++ ", " ++ show s
-  show (Ist s d)              = "    st      " ++ show s ++ ", " ++ show d
+  show (Isd s d)              = "    sd      " ++ show s ++ ", " ++ show d
 
   show (Iand d s0 s1)         = "    and     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
   show (Iandi d s0 s1)        = "    andi    " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
@@ -210,12 +212,12 @@ instance Show Instr where
   show (Pseq d s0 s1)         = "    seq     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
   show (Psle d s0 s1)         = "    sle     " ++ show d ++ ", " ++ show s0 ++ ", " ++ show s1
 
-  show (Ibranch lbl)          = "    j       " ++ lbl
-  show (IcondBranch cond lbl) = "    " ++ show cond ++ ", " ++ lbl
-  show (Icall func i)         = "    call    " ++ func ++ " -- arity: " ++ show i
-  show (IindirectCall func i) = "    jalr    ra, " ++ show func ++ ", 0 -- arity: " ++ show i
+  show (Ibranch lbl)          = "    j       .L" ++ lbl
+  show (IcondBranch cond lbl) = "    " ++ show cond ++ ", .L" ++ lbl
+  show (Icall func i)         = "    call    " ++ func ++ " # arity: " ++ show i
+  show (IindirectCall func i) = "    jalr    ra, " ++ show func ++ ", 0 # arity: " ++ show i
   show (Ila d s)              = "    la      " ++ show d ++ ", " ++ show s
-  show (Ilabel lbl instr)     = lbl ++ ":\n" ++
+  show (Ilabel lbl instr)     = ".L" ++ lbl ++ ":\n" ++
                                 show instr
   show Iret                    = "    ret"
 
@@ -246,7 +248,7 @@ readLocs instr = case instr of
   Pmv    _ s       -> locs' [s]
   Ild    _ s       -> locs' [s]
   Ili    _ _       -> Set.empty
-  Ist    s _       -> locs' [s]
+  Isd    s _       -> locs' [s]
   Iand   _ s0 s1   -> locs' [s0, s1]
   Iandi  _ s0 _    -> locs' [s0]
   Ior    _ s0 s1   -> locs' [s0, s1]
@@ -278,7 +280,7 @@ writeLocs instr = case instr of
   Pmv    d _       -> locs' [d]
   Ild    d _       -> locs' [d]
   Ili    d _       -> locs' [d]
-  Ist    _ d       -> locs' [d]
+  Isd    _ d       -> locs' [d]
   Iand   d _ _     -> locs' [d]
   Iandi  d _ _     -> locs' [d]
   Ior    d _ _     -> locs' [d]
@@ -334,7 +336,7 @@ replaceVars m instr =
     Pmv    d s       -> Pmv    (re d) (re s)
     Ild    d s       -> Ild    (re d) (re s)
     Ili    d s       -> Ili    (re d) (re s)
-    Ist    s d       -> Ist    (re s) (re d)
+    Isd    s d       -> Isd    (re s) (re d)
   
     Iand   d s0 s1   -> Iand   (re d) (re s0) (re s1)
     Iandi  d s0 s1   -> Iandi  (re d) (re s0) (re s1)

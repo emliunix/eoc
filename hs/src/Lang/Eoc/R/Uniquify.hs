@@ -1,3 +1,4 @@
+{-# LANGUAGE OrPatterns #-}
 module Lang.Eoc.R.Uniquify where
 
 import Debug.Trace (trace)
@@ -9,11 +10,13 @@ import Lang.Eoc.R.Types
 
 uniquify :: RDefs -> PassM RDefs
 uniquify (RDefsProgram info defs) = do
-  defs' <- traverse uniquifyDef defs 
+  defs' <- traverse uniquifyDef defs
   return $ RDefsProgram info defs'
   where
+    defsEnv = [(name, name) | Def _ name _ _ _ <- defs]
     uniquifyDef (Def info name args retTy body) =
-      Def info name args retTy <$> uniquifyExp (map ((\v -> (v, v)) . fst) args) body
+      let argsEnv = [(v, v) | (v, _) <- args]
+      in Def info name args retTy <$> uniquifyExp (argsEnv ++ defsEnv) body
 
 type NamesEnv = [(Var, Var)]
 
@@ -50,4 +53,10 @@ uniquifyExp env (While cond body) = do
   cond' <- uniquifyExp env cond
   body' <- uniquifyExp env body
   return $ While cond' body'
-uniquifyExp _ t = return t
+uniquifyExp env (Apply func args) = do
+  func' <- uniquifyExp env func
+  args' <- traverse (uniquifyExp env) args
+  return $ Apply func' args'
+-- FunRef is internal only, so we can't even encounter it now
+uniquifyExp _ t@(FunRef _) = return t
+uniquifyExp _ t@(Int_ _; Bool_ _; Unit_) = return t

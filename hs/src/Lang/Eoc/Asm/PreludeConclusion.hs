@@ -7,27 +7,27 @@ import Lang.Eoc.Asm.Types
 
 mkPrelude :: Int -> [Reg] -> [Instr]
 mkPrelude stackSize usedSavedRegs =
-  [ Ist (ArgReg RA) (ArgMemRef (-8) SP)
-  , Ist (ArgReg S0) (ArgMemRef (-16) SP)
-  , Iaddi (ArgReg S0) (ArgReg SP) (ArgImm 0)
-  , Iaddi (ArgReg SP) (ArgReg SP) (ArgImm (-stackSize))
+  [ Iaddi (ArgReg SP) (ArgReg SP) (ArgImm (-stackSize))
+  , Isd (ArgReg RA) (ArgMemRef (stackSize - 8) SP)
+  , Isd (ArgReg S0) (ArgMemRef (stackSize - 16) SP)
+  , Iaddi (ArgReg S0) (ArgReg SP) (ArgImm stackSize)
   ] ++ zipWith mkSt usedSavedRegs [0..]
   where
     mkSt reg idx =
-      Ist (ArgReg reg) (ArgMemRef (-16 - 8 * (idx + 1)) S0)
+      Isd (ArgReg reg) (ArgMemRef (stackSize - 16 - 8 * (idx + 1)) SP)
 
 mkConclusion :: Int -> [Reg] -> String -> [Instr]
 mkConclusion stackSize usedSavedRegs conclusionLabel =
   labelBlock conclusionLabel instrs
   where
     instrs = zipWith mkLd usedSavedRegs [0..] ++
-      [ Iaddi (ArgReg SP) (ArgReg SP) (ArgImm stackSize)
-      , Ild (ArgReg S0) (ArgMemRef (-16) SP)
-      , Ild (ArgReg RA) (ArgMemRef (-8) SP)
+      [ Ild (ArgReg RA) (ArgMemRef (stackSize - 8) SP)
+      , Ild (ArgReg S0) (ArgMemRef (stackSize - 16) SP)
+      , Iaddi (ArgReg SP) (ArgReg SP) (ArgImm stackSize)
       , Iret
       ]
     mkLd reg idx =
-      Ild (ArgReg reg) (ArgMemRef (-16 - 8 * (idx + 1)) S0)
+      Ild (ArgReg reg) (ArgMemRef (stackSize - 16 - 8 * (idx + 1)) S0)
 
 preludeConclusion :: AsmDefs -> PassM AsmDefs
 preludeConclusion (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse goDef defs

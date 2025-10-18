@@ -35,7 +35,8 @@ test1 = do
                 , ("f", Set.fromList $ map (: []) "cd" )
                 ]
         initColors = Map.fromList [("a", -1), ("c", -1)]
-    dSatur graph initColors Map.empty `shouldBe`
+        nodes = Set.fromList ["b", "d", "e", "f"]
+    dSatur graph initColors Map.empty nodes `shouldBe`
          Map.fromList
          [ ("a", -1)
          , ("b", 0)
@@ -77,7 +78,8 @@ testMoveBiasing = do
                 , (ArgVar "z", Set.fromList  [ArgVar "x"])
                 , (ArgVar "v", Set.fromList  [ArgVar "x"])
                 ]
-    in do dSatur graph initColors moves `shouldBe`
+        nodes = Set.fromList $ map ArgVar ["y", "w", "x", "v"]
+    in do dSatur graph initColors moves nodes `shouldBe`
             Map.fromList
             [ (ArgReg A0, -1)
             , (ArgVar "t", 0)
