@@ -16,12 +16,6 @@ interferes (Pmv d s) lives =
   | r <- Set.toList lives
   , r /= d && r /= s
   ]
-interferes (Icall _) lives =
-  [ (r1, r2)
-  | r1 <- map ArgReg callerSavedRegs
-  , r2 <- Set.toList lives
-  , r1 /= r2
-  ]
 interferes i lives =
   [ (r1, r2)
   | r1 <- Set.toList $ writeLocs i
@@ -48,10 +42,15 @@ buildInterferences' blocks livesMap =
       Map.insertWith Set.union v1 (Set.singleton v2) $
         Map.insertWith Set.union v2 (Set.singleton v1) m
 
-buildInterferences :: Asm -> PassM Asm
-buildInterferences (AsmProgram info instrs) = pure $ AsmProgram (info {aiInterferences = Just interferenceGraph}) instrs
+
+buildInterferences :: AsmDefs -> PassM AsmDefs
+buildInterferences (AsmDefsProgram info defs) =
+  AsmDefsProgram info <$> traverse goDef defs
   where
-    livesMap = case aiLivesMap info of
-      Just lm -> lm
-      Nothing -> throw $ MyException "Liveness information missing when building interference graph"
-    interferenceGraph = buildInterferences' (splitBlocks instrs) livesMap
+    goDef (AsmDef info name instrs) =
+      let
+        livesMap = case aiLivesMap info of
+          Just lm -> lm
+          Nothing -> throw $ MyException "Liveness information missing when building interference graph"
+        interferenceGraph = buildInterferences' (splitBlocks instrs) livesMap
+      in return $ AsmDef (info { aiInterferences = Just interferenceGraph }) name instrs

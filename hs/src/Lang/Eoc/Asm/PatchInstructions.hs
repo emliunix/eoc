@@ -201,5 +201,8 @@ patchInstrs (i:is) =
   where
     cont = patchInstrs is
 
-patchInstructions :: Asm -> PassM Asm
-patchInstructions (AsmProgram info instrs) = pure (AsmProgram info (patchInstrs instrs))
+patchInstructions :: AsmDefs -> PassM AsmDefs
+patchInstructions (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse goDef defs
+  where
+    goDef (AsmDef info name instrs) =
+      return $ AsmDef info name (patchInstrs instrs)

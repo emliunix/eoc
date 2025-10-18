@@ -15,23 +15,50 @@ import Lang.Eoc.CVar
 import Lang.Eoc.Types (Var, MyException(..))
 
 data AsmInfo = AsmInfo
-  { aiLocalsTypes :: Maybe (Map Var CType)
+  {
+  }
+  deriving (Show)
+
+emptyAsmInfo :: AsmInfo
+emptyAsmInfo = AsmInfo
+
+data AsmDefInfo = AsmDefInfo
+  { aiStartLabel :: String
+  , aiConclusionLabel :: String
+  , aiLocalsTypes :: Maybe (Map Var CType)
   , aiStackSpace :: Maybe Int
+  , aiUsedSavedRegs :: Maybe [Reg]
   , aiLivesMap :: Maybe (Map String (Set Arg)) -- ^ label to live variables before that point
   , aiInterferences :: Maybe (Map Arg (Set Arg))
   , aiMoves :: Maybe (Map Arg (Set Arg))
   } deriving (Show)
 
-emptyAsmInfo :: AsmInfo
-emptyAsmInfo = AsmInfo Nothing Nothing Nothing Nothing Nothing
+emptyAsmDefInfo :: String -> String -> AsmDefInfo
+emptyAsmDefInfo startLbl conclLbl =
+  AsmDefInfo
+    startLbl conclLbl
+    Nothing Nothing Nothing Nothing Nothing Nothing
 
 data Asm = AsmProgram AsmInfo [Instr]
 
 instance Show Asm where
-  show (AsmProgram (AsmInfo locals stack lives inferences moves) instrs) =
-    ".localsTypes = " ++ show locals ++ "\n" ++
-    ".stackSpace = " ++ show stack ++ "\n" ++
+  show (AsmProgram info instrs) =
     concatMap (\i -> show i ++ "\n") instrs
+
+data AsmDef = AsmDef AsmDefInfo String [Instr]
+
+instance Show AsmDef where
+  show (AsmDef info name instrs) =
+    ".global " ++ name ++ "\n" ++
+    ".align 8\n" ++
+    name ++ ":\n" ++
+    concatMap (\i -> show i ++ "\n") instrs
+
+data AsmDefs = AsmDefsProgram AsmInfo [AsmDef]
+
+instance Show AsmDefs where
+  show (AsmDefsProgram info defs) =
+    concatMap (\d -> show d ++ "\n") defs
 
 data Reg
   = X0 | RA | SP | GP | TP
@@ -82,11 +109,21 @@ callerSavedRegs =
   , T0, T1, T2, T3, T4, T5, T6
   ]
 
+calleeSavedRegs :: [Reg]
+calleeSavedRegs =
+  [ S0, S1
+  , S2, S3, S4, S5, S6, S7, S8, S9, S10, S11
+  ]
+
+argRegs :: [Reg]
+argRegs = [A0, A1, A2, A3, A4, A5, A6, A7]
+
 data Arg
   = ArgVar Var
   | ArgReg Reg
   | ArgImm Int
   | ArgMemRef Int Reg
+  | ArgGlobal Var
   deriving (Eq, Ord)
 
 instance Show Arg where
@@ -94,6 +131,7 @@ instance Show Arg where
   show (ArgReg r) = show r
   show (ArgImm i) =  show i
   show (ArgMemRef i r) = show i ++ "(" ++ show r ++ ")"
+  show (ArgGlobal v) = v
 
 data BranchCond
   = Beq Arg Arg | Beqz Arg
@@ -134,7 +172,9 @@ data Instr
 
   | Ibranch String
   | IcondBranch BranchCond String
-  | Icall String
+  | Ila Arg Arg
+  | Icall String Int
+  | IindirectCall Arg Int
   | Ilabel String Instr
   | Iret
   deriving (Eq)
@@ -172,7 +212,9 @@ instance Show Instr where
 
   show (Ibranch lbl)          = "    j       " ++ lbl
   show (IcondBranch cond lbl) = "    " ++ show cond ++ ", " ++ lbl
-  show (Icall func)           = "    call    " ++ func
+  show (Icall func i)         = "    call    " ++ func ++ " -- arity: " ++ show i
+  show (IindirectCall func i) = "    jalr    ra, " ++ show func ++ ", 0 -- arity: " ++ show i
+  show (Ila d s)              = "    la      " ++ show d ++ ", " ++ show s
   show (Ilabel lbl instr)     = lbl ++ ":\n" ++
                                 show instr
   show Iret                    = "    ret"
@@ -221,7 +263,9 @@ readLocs instr = case instr of
   Psle   _ s0 s1   -> locs' [s0, s1]
   Ibranch _        -> Set.empty
   IcondBranch _ _  -> Set.empty
-  Icall _          -> Set.empty  -- TODO: consider argument registers (A0–A7)
+  Icall  _ i       -> locs' (take i (map ArgReg argRegs))
+  IindirectCall fn i -> locs' (fn : take i (map ArgReg argRegs))
+  Ila    _ _       -> Set.empty -- loading address, no read
   Iret             -> Set.empty
   
 writeLocs :: Instr -> Set Arg
@@ -251,7 +295,9 @@ writeLocs instr = case instr of
   Psle   d _ _     -> locs' [d]
   Ibranch _        -> Set.empty
   IcondBranch _ _  -> Set.empty
-  Icall _          -> locs' [ArgReg A0] -- return register
+  Icall _ _        -> locs' (map ArgReg callerSavedRegs)
+  IindirectCall _ _ -> locs' (map ArgReg callerSavedRegs)
+  Ila d _          -> locs' [d]
   Iret             -> Set.empty
 
 liveBefore :: Instr -> Set Arg -> Set Arg
@@ -267,6 +313,13 @@ splitBlocks (i@(Ilabel lbl _):is) =
       in (lbl', [i], bAcc')
     go (lbl, iAcc, bAcc) i = (lbl, i:iAcc, bAcc)
 splitBlocks _ = throw $ MyException "instruction sequence must start with a label"
+
+labelBlock :: String -> [Instr] -> [Instr]
+labelBlock lbl instrs =
+  case instrs of
+    (Ilabel _ i : is) -> Ilabel lbl i : is
+    (i : is) -> Ilabel lbl i : is
+    [] -> [Ilabel lbl noop]
 
 replaceVars :: Map Arg Arg -> Instr -> Instr
 replaceVars m (Ilabel lbl i) = Ilabel lbl (replaceVars m i)
@@ -301,11 +354,13 @@ replaceVars m instr =
     Psle   d s0 s1   -> Psle   (re d) (re s0) (re s1)
     IcondBranch cond lbl ->
       let cond' = case cond of
-            Beq a b -> Beq (re a) (re b)
-            Beqz a -> Beqz (re a)
-            Bne a b -> Bne (re a) (re b)
-            Bnez a -> Bnez (re a)
-            Blt a b -> Blt (re a) (re b)
-            Bge a b -> Bge (re a) (re b)
+            Beq  a b -> Beq  (re a) (re b)
+            Beqz a   -> Beqz (re a)
+            Bne  a b -> Bne  (re a) (re b)
+            Bnez a   -> Bnez (re a)
+            Blt  a b -> Blt  (re a) (re b)
+            Bge  a b -> Bge  (re a) (re b)
       in IcondBranch cond' lbl
-    Ibranch _; Icall _; Iret -> instr
+    Ila d s          -> Ila (re d) (re s)
+    IindirectCall fn i -> IindirectCall (re fn) i
+    Ibranch _; Icall _ _; Iret -> instr

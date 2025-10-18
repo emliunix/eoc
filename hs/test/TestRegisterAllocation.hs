@@ -99,7 +99,8 @@ testCompileE2E = do
       :> ("allocateRegisters", allocateRegisters)
       :> ("patchInstructions", patchInstructions)
     test = compile passes
-    example = AsmProgram emptyAsmInfo instrs
+    example = AsmDefsProgram emptyAsmInfo
+      [AsmDef (emptyAsmDefInfo "start" "conclusion") "test" instrs]
     instrs =
       [ Ilabel "start" $ Pmv (ArgVar "v") (ArgImm 1)
       , Pmv (ArgVar "w") (ArgImm 42)

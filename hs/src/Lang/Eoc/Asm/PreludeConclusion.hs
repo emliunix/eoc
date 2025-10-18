@@ -5,28 +5,45 @@ import Control.Exception (throw)
 import Lang.Eoc.Types
 import Lang.Eoc.Asm.Types
 
-preludeConclusion' :: Int -> ([Instr], [Instr])
-preludeConclusion' stackSize = (prelude, conclusion)
+mkPrelude :: Int -> [Reg] -> [Instr]
+mkPrelude stackSize usedSavedRegs =
+  [ Ist (ArgReg RA) (ArgMemRef (-8) SP)
+  , Ist (ArgReg S0) (ArgMemRef (-16) SP)
+  , Iaddi (ArgReg S0) (ArgReg SP) (ArgImm 0)
+  , Iaddi (ArgReg SP) (ArgReg SP) (ArgImm (-stackSize))
+  ] ++ zipWith mkSt usedSavedRegs [0..]
   where
-    prelude =
-      [ Ilabel "main" $
-        Ist (ArgReg RA) (ArgMemRef (-8) S0)
-      , Ist (ArgReg S0) (ArgMemRef (-16) S0)
-      , Iaddi (ArgReg S0) (ArgReg S0) (ArgImm (-stackSize))
-      ]
-    conclusion =
-      [ Ilabel "conclusion" $
-        Iaddi (ArgReg S0) (ArgReg S0) (ArgImm stackSize)
-      , Ild (ArgReg S0) (ArgMemRef (-16) S0)
-      , Ild (ArgReg RA) (ArgMemRef (-8) S0)
+    mkSt reg idx =
+      Ist (ArgReg reg) (ArgMemRef (-16 - 8 * (idx + 1)) S0)
+
+mkConclusion :: Int -> [Reg] -> String -> [Instr]
+mkConclusion stackSize usedSavedRegs conclusionLabel =
+  labelBlock conclusionLabel instrs
+  where
+    instrs = zipWith mkLd usedSavedRegs [0..] ++
+      [ Iaddi (ArgReg SP) (ArgReg SP) (ArgImm stackSize)
+      , Ild (ArgReg S0) (ArgMemRef (-16) SP)
+      , Ild (ArgReg RA) (ArgMemRef (-8) SP)
       , Iret
       ]
+    mkLd reg idx =
+      Ild (ArgReg reg) (ArgMemRef (-16 - 8 * (idx + 1)) S0)
 
-preludeConclusion :: Asm -> PassM Asm
-preludeConclusion (AsmProgram info instrs) = pure $ AsmProgram info instrs'
+preludeConclusion :: AsmDefs -> PassM AsmDefs
+preludeConclusion (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse goDef defs
   where
-    stackSize = case aiStackSpace info of
-      Just s -> s
-      Nothing -> throw $ MyException "Stack size missing when adding prelude and conclusion"
-    (prelude, conclusion) = preludeConclusion' stackSize
-    instrs' = prelude ++ instrs ++ conclusion
+    goDef (AsmDef info name instrs) =
+      let
+        stackSize = case aiStackSpace info of
+          Just s -> s
+          Nothing -> throw $ MyException
+            "Stack size missing when adding prelude and conclusion"
+        usedSavedRegs = case aiUsedSavedRegs info of
+          Just rs -> rs
+          Nothing -> throw $ MyException
+            "Used saved registers missing when adding prelude and conclusion"
+        conclLbl = aiConclusionLabel info
+        prelude = mkPrelude stackSize usedSavedRegs
+        conclusion = mkConclusion stackSize usedSavedRegs conclLbl
+        instrs' = prelude ++ instrs ++ conclusion
+      in return $ AsmDef info name instrs'

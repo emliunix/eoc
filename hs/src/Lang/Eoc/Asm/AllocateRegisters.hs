@@ -19,19 +19,26 @@ import Lang.Eoc.Asm.Types
 
 -- | negatively numbered reserved registers
 -- -1 -> S0(FP)
--- -2 -> A1
--- and so on
+-- -2 -> RA
+-- -3 -> SP
 reservedRegs :: [Reg]
-reservedRegs = [S0, T6]
+reservedRegs = [S0, RA, SP]
 
 -- | registers free for allocation,
 -- 0 indexed
 freeRegs :: [Reg]
 freeRegs =
   [ A0, A1, A2, A3, A4, A5, A6, A7
-  , T0, T1, T2, T3, T4, T5
+  , T3, T4, T5, T6
   , S1, S2, S3, S4, S5, S6, S7, S8, S9, S10, S11
   ]
+
+-- | the index of S1 in freeRegs
+index1stSaved :: Int
+index1stSaved = 12
+
+sizeSaved :: Int
+sizeSaved = 11
 
 -- | dsatur graph coloring with move biasing
 dSatur :: (Ord t, Show t) =>
@@ -74,19 +81,33 @@ dSatur graph colorMap moves =
               neighbours = filter (`Set.member` neighs) $ Map.keys sats
       in go sats' colors'
 
-allocateRegisters :: Asm -> PassM Asm
-allocateRegisters (AsmProgram info instrs) = pure $ AsmProgram info instrs'
+allocateRegisters :: AsmDefs -> PassM AsmDefs
+allocateRegisters (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse goDef defs
   where
-    interferenceGraph = case aiInterferences info of
-      Just g -> g
-      Nothing -> throw $ MyException "no interference graph found in AsmInfo"
-    movesGraph = case aiMoves info of
-      Just mvs -> mvs
-      Nothing -> throw $ MyException "no moves found in AsmInfo"
-    initialColors = Map.fromList $ zip (map ArgReg reservedRegs) (map negate [1..])
-    colors = dSatur interferenceGraph initialColors movesGraph
-    -- TODO: stack slots allocation
-    -- 1. size/align of each slot
-    -- 2. computes stack space and store to info
-    -- TODO: handle stack slots
-    instrs' = map (replaceVars $ Map.map (map ArgReg freeRegs !!) colors) instrs
+    goDef (AsmDef info name instrs) =
+      let
+        interferenceGraph = case aiInterferences info of
+          Just g -> g
+          Nothing -> throw $ MyException "no interference graph found in AsmInfo"
+        movesGraph = case aiMoves info of
+          Just mvs -> mvs
+          Nothing -> throw $ MyException "no moves found in AsmInfo"
+        initialColors = Map.fromList $ zip (map ArgReg reservedRegs) (map negate [1..])
+        colors = dSatur interferenceGraph initialColors movesGraph
+        maxCol = foldl max 0 $ Map.elems colors
+        stackSlots =
+          let nSlots = maxCol - length freeRegs
+          in if nSlots > 0
+             then map (\i -> ArgMemRef (i*8) SP) [0..nSlots]
+             else []
+        coloredSlots = map ArgReg freeRegs ++ stackSlots
+        stackSpace = ((16 + (length stackSlots * 8) + 15) `div` 16) * 16
+        usedSavedRegs =
+          let nUsed = min sizeSaved (max 0 (maxCol - index1stSaved))
+          in take nUsed $ drop index1stSaved freeRegs
+        instrs' = map (replaceVars $ Map.map (coloredSlots !!) colors) instrs
+        info' = info
+          { aiStackSpace = Just stackSpace
+          , aiUsedSavedRegs = Just usedSavedRegs
+          }
+      in return $ AsmDef info' name instrs'

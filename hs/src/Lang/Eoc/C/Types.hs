@@ -71,8 +71,9 @@ type Label = String
 
 data C = CProgram CInfo [(Label, Tail)]
 
-data CDefInfo = CDefInfo { }
-  deriving (Show)
+data CDefInfo = CDefInfo
+  { startBlockLabel :: Label
+  } deriving (Show)
 
 data CDef = CDef CDefInfo Var [(Var, CType)] CType [(Label, Tail)]
 

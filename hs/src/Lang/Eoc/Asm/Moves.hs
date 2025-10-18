@@ -23,5 +23,9 @@ uncoverMoves' instrs = foldl goMv Map.empty (moves instrs)
           Map.insertWith Set.union v1 (Set.singleton v2) $
             Map.insertWith Set.union v2 (Set.singleton v1) acc
 
-uncoverMoves :: Asm -> PassM Asm
-uncoverMoves (AsmProgram info instrs) = pure $ AsmProgram info { aiMoves = Just (uncoverMoves' instrs) } instrs
+uncoverMoves :: AsmDefs -> PassM AsmDefs
+uncoverMoves (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse goDef defs
+  where
+    goDef (AsmDef info name instrs) =
+      let info' = info { aiMoves = Just (uncoverMoves' instrs) }
+      in return $ AsmDef info' name instrs

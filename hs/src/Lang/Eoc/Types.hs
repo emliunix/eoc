@@ -108,9 +108,11 @@ freshTmpVar = PassM $ state $ \s ->
       s' = s { nextTmpVarId = varId + 1 }
   in (var, s')
 
-freshBlock :: PassM String
-freshBlock = PassM $ state $ \s ->
+freshBlockId :: PassM Int
+freshBlockId = PassM $ state $ \s ->
   let blockId = nextBlockId s
-      block = "block" ++ show blockId
       s' = s { nextBlockId = blockId + 1 }
-  in (block, s')
+  in (blockId, s')
+
+freshBlock :: PassM String
+freshBlock = ("block" ++) . show <$> freshBlockId

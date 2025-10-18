@@ -13,6 +13,7 @@ import Lang.Eoc.R
 import Lang.Eoc.Parser (parseRfromString')
 
 import Lang.Eoc.C (explicateControl, placeBlocks, mergeBlocks)
+import Lang.Eoc.Asm.SelectInstructions (selectInstructions)
 
 data Passes a b where
   InitialPass :: (Show a) => (String, a -> PassM b) -> Passes a b
@@ -161,6 +162,7 @@ specFun = describe "Function Tests" $ do
       :> ("explicateControl", explicateControl)
       :> ("placeBlocks", placeBlocks)
       :> ("mergeBlocks", mergeBlocks)
+      :> ("selectInstructions", selectInstructions)
     example = parseRfromString' """
     \&(define (double [x: Int]) : Int
     \&  (+ x x))

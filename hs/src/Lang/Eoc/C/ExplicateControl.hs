@@ -177,8 +177,12 @@ explicateControl (RDefsProgram _ defs) = do
   where
     goDef (Def _ name args retTy body) = do
       (tail, state) <- runCPass $ explicateTail body
-      let blocks' = ("start", tail) : Map.toList (blocks state)
-      return $ CDef CDefInfo name args' retTy' blocks'
+      startLbl <- ("start" ++) . show <$> freshBlockId
+      let blocks' = (startLbl, tail) : Map.toList (blocks state)
+      let defInfo = CDefInfo
+            { startBlockLabel = startLbl
+            }
+      return $ CDef defInfo name args' retTy' blocks'
       where
         args' = map (second ctype) args
         retTy' = ctype retTy

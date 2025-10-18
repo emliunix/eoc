@@ -34,30 +34,36 @@ evalCmp op a b
            " between " ++ show CUnit ++ " and " ++ show CUnit
 evalCmp _ _ _ = Nothing
 
-selTail :: Tail -> [Instr]
-selTail (Seq stmt tail) = selStmt stmt ++ selTail tail
-selTail (Goto lbl) = [Ibranch lbl]
-selTail (Return exp) = selExp (ArgReg A0) exp
-selTail (IfStmt cmp a b (Goto lbThn) (Goto lbEls))
-  | Just res <- evalCmp cmp a b = if res then [Ibranch lbThn] else [Ibranch lbEls]
-  -- branch to else, fall through to then, following common CPU conventions
-  | otherwise = [nCondBr cmp a b lbEls, Ibranch lbThn]
-  where
-    -- eq / ne
-    nCondBr PrimEq a b = IcondBranch (Bne (selAtm a) (selAtm b))
-    nCondBr PrimNe a b = IcondBranch (Beq (selAtm a) (selAtm b))
-    -- cmp
-    nCondBr PrimGe a b = IcondBranch (Bge (selAtm b) (selAtm a))
-    nCondBr PrimLe a b = IcondBranch (Bge (selAtm a) (selAtm b))
-    nCondBr PrimGt a b = IcondBranch (Blt (selAtm a) (selAtm b))
-    nCondBr PrimLt a b = IcondBranch (Blt (selAtm b) (selAtm a))
-    -- invalid
-    nCondBr op a b = throw $ MyException $ "invalid comparison: " ++ show op ++
-                      " between " ++ show a ++ " and " ++ show b
-selTail t = throw $ MyException $ "invalid tail: " ++ show t
+selTail :: String -> Tail -> [Instr]
+selTail conclLbl tail =
+  case tail of
+    (Seq stmt tail) -> selStmt stmt ++ selTail conclLbl tail
+    (Goto lbl) -> [Ibranch lbl]
+    (Return exp) -> selExp (ArgReg A0) exp ++ [Ibranch conclLbl]
+    (IfStmt cmp a b (Goto lbThn) (Goto lbEls))
+      | Just res <- evalCmp cmp a b -> if res then [Ibranch lbThn] else [Ibranch lbEls]
+      -- branch to else, fall through to then, following common CPU conventions
+      | otherwise -> [nCondBr cmp a b lbEls, Ibranch lbThn]
+      where
+        -- eq / ne
+        nCondBr PrimEq a b = IcondBranch (Bne (selAtm a) (selAtm b))
+        nCondBr PrimNe a b = IcondBranch (Beq (selAtm a) (selAtm b))
+        -- cmp
+        nCondBr PrimGe a b = IcondBranch (Bge (selAtm b) (selAtm a))
+        nCondBr PrimLe a b = IcondBranch (Bge (selAtm a) (selAtm b))
+        nCondBr PrimGt a b = IcondBranch (Blt (selAtm a) (selAtm b))
+        nCondBr PrimLt a b = IcondBranch (Blt (selAtm b) (selAtm a))
+        -- invalid
+        nCondBr op a b = throw $ MyException $ "invalid comparison: " ++ show op ++
+                          " between " ++ show a ++ " and " ++ show b
+    t -> throw $ MyException $ "invalid tail: " ++ show t
 
 selStmt :: Stmt -> [Instr]
 selStmt (Assign var expr) = selExp (ArgVar var) expr
+selStmt (StmtCall fn args) =
+  zipWith Pmv (map ArgReg argRegs) (map selAtm args) ++
+  [ IindirectCall (selAtm fn) (length args)
+  ]
 selStmt (StmtPrim op args) = error "not implemented"
 
 selAtm :: CAtm -> Arg
@@ -86,11 +92,35 @@ selExp dst (CPrim PrimNot [a]) =
   [Ixori dst (selAtm a) (ArgImm 1)]
 selExp _ e@(CPrim _ _) =
   throw $ MyException $ "primop not implemented: " ++ show e
+selExp dst (CFunRef ref) = [Ila dst (ArgGlobal ref)]
+selExp dst (CCall fn args) =
+  zipWith Pmv (map ArgReg argRegs) (map selAtm args) ++
+  [ IindirectCall (selAtm fn) (length args)
+  , Pmv dst (ArgReg A0)
+  ]
 
-selectInstructions :: C -> PassM Asm
-selectInstructions (CProgram info blks) = pure $ AsmProgram emptyAsmInfo instrs
+selArgs :: [String] -> [Instr]
+selArgs xs =
+  reverse $ foldl mkMv [] $ zip xs argRegs
   where
-    instrs = concatMap mkBlk blks
-    mkBlk (lbl, tail) = case selTail tail of
-      i:is -> Ilabel lbl i : is
-      [] -> [Ilabel lbl noop]
+    mkMv acc (src, reg) = Pmv (ArgReg reg) (ArgVar src) : acc
+
+selectInstructions :: CDefs -> PassM AsmDefs
+selectInstructions (CDefsProgram info defs) = AsmDefsProgram emptyAsmInfo <$> traverse goDef defs
+  where
+    goDef (CDef defInfo name args rety blks) = do
+      conclLbl <- ("conclusion" ++) . show <$> freshBlockId
+      let asmDefInfo = emptyAsmDefInfo (startBlockLabel defInfo) conclLbl
+      let instrs = concatMap (mkBlk conclLbl) blks
+      return $ AsmDef asmDefInfo name instrs
+      where
+        argsInstrs = selArgs (map fst args)
+        startLbl = startBlockLabel defInfo
+        mkBlk conclLbl (lbl, tail) =
+          let instrs = selTail conclLbl tail
+              instrs' = if lbl == startLbl
+                then argsInstrs ++ instrs
+                else instrs
+          in case instrs' of
+               i:is -> Ilabel lbl i : is
+               [] -> [Ilabel lbl noop]

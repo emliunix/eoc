@@ -38,4 +38,5 @@ placeBlocks (CDefsProgram info defs) =
   where
     defs' = traverse placeDef defs
     placeDef (CDef info name args rty blocks) =
-      return $ CDef info name args rty (rpoBlocks "start" blocks)
+      let startLbl = startBlockLabel info
+      in return $ CDef info name args rty (rpoBlocks startLbl blocks)

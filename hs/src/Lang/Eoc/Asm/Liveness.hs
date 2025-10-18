@@ -73,9 +73,15 @@ lookupMap' k m = case Map.lookup k m of
   Just v -> v
   Nothing -> throw $ MyException $ "key not found in map: " ++ show k ++ ", keys: " ++ show (Map.keys m) ++ "backtrace:\n" ++ prettyCallStack callStack
 
-uncoverLives :: Asm -> PassM Asm
-uncoverLives (AsmProgram info instrs) = 
-  let blocks = splitBlocks instrs
-      inits = Map.fromList [("conclusion", Set.singleton (ArgReg A1))]
-      livesAfters = analyzeLiveness' blocks inits
-  in pure $ AsmProgram (info { aiLivesMap = Just (Map.fromList livesAfters) }) instrs
+uncoverLives :: AsmDefs -> PassM AsmDefs
+uncoverLives (AsmDefsProgram info defs) =
+  AsmDefsProgram info <$>
+    traverse goDef defs
+  where
+    goDef (AsmDef info name instrs) =
+      let blocks = splitBlocks instrs
+          inits = Map.fromList [(aiConclusionLabel info, Set.singleton (ArgReg A0))]
+          livesAfters = analyzeLiveness' blocks inits
+      in return $ AsmDef
+           (info { aiLivesMap = Just (Map.fromList livesAfters) })
+           name instrs
