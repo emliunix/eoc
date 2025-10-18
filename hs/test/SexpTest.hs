@@ -71,7 +71,7 @@ sexpTestSpec = describe "S-expression Parser Tests" $ do
           Let "x" (Int_ 10)
           (If (Bool_ True)
             (Prim PrimPlus [Var "x", Int_ 1])
-            (Prim PrimNeg [Var "x", Int_ 1]))
+            (Prim PrimSub [Var "x", Int_ 1]))
     -- putStrLn $ "sexp: " ++ show (success (parseSexpFromString input))
     result `shouldBeSuccess` expectedR
   it "parses defines" $ do
