@@ -135,9 +135,7 @@ patchCond cond = case cond of
 
 patchInstrs :: [Instr] -> [Instr]
 patchInstrs [] = []
-patchInstrs (Ilabel l i : is) = case patchInstrs (i:is) of
-  i:is -> Ilabel l i:is
-  [] -> [Ilabel l noop] -- NOP
+patchInstrs (Ilabel l i : is) = labelBlock l $ patchInstrs (i:is)
 patchInstrs (i:is) =
   case i of
     Pmv a b | a == b -> cont  -- remove redundant move
@@ -195,8 +193,6 @@ patchInstrs (i:is) =
         condBranch = runPatch $ do
           cond' <- patchCond cond
           return [IcondBranch cond' lbl]
-    Ibranch lbl
-      | (Ilabel l' _ : _) <- cont, lbl == l' -> cont
     _ -> i : cont
   where
     cont = patchInstrs is

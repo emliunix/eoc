@@ -305,21 +305,29 @@ writeLocs instr = case instr of
 liveBefore :: Instr -> Set Arg -> Set Arg
 liveBefore instr s = s & flip Set.difference (writeLocs instr) & Set.union (readLocs instr)
 
+labels :: Instr -> Maybe [String]
+labels (Ilabel lbl i) = case labels i of
+  Just lbls -> Just (lbl : lbls)
+  Nothing   -> Just [lbl]
+labels _ = Nothing
+
 splitBlocks :: [Instr] -> [(String, [Instr])]
-splitBlocks (i@(Ilabel lbl _):is) =
-  let (l', is', bs) = foldl go (lbl, [i], []) is in
-    reverse $ (l', reverse is') : bs
-  where
-    go (lbl, iAcc, bAcc) i@(Ilabel lbl' _) =
-      let bAcc' = (lbl, reverse iAcc) : bAcc
-      in (lbl', [i], bAcc')
-    go (lbl, iAcc, bAcc) i = (lbl, i:iAcc, bAcc)
+splitBlocks (i:is)
+  | Just initialLbls <- labels i =
+      let (lastLbls, is', bs) = foldl go (initialLbls, [i], []) is
+          go (lbls, iAcc, bAcc) i
+            | Just lbls' <- labels i =
+                let blk = reverse iAcc
+                    bAcc' = map (, blk) lbls ++ bAcc
+                in (lbls', [i], bAcc')
+            | otherwise = (lbls, i:iAcc, bAcc)
+          lastBlk = reverse is'
+      in reverse $ map (, lastBlk) lastLbls ++ bs
 splitBlocks _ = throw $ MyException "instruction sequence must start with a label"
 
 labelBlock :: String -> [Instr] -> [Instr]
 labelBlock lbl instrs =
   case instrs of
-    (Ilabel _ i : is) -> Ilabel lbl i : is
     (i : is) -> Ilabel lbl i : is
     [] -> [Ilabel lbl noop]
 

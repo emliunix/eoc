@@ -7,6 +7,7 @@ module Lang.Eoc.Asm
   , module Lang.Eoc.Asm.AllocateRegisters
   , module Lang.Eoc.Asm.PatchInstructions
   , module Lang.Eoc.Asm.PreludeConclusion
+  , module Lang.Eoc.Asm.RemoveJmp
   ) where
 
 import Lang.Eoc.Asm.Types
@@ -17,3 +18,4 @@ import Lang.Eoc.Asm.Moves (uncoverMoves)
 import Lang.Eoc.Asm.AllocateRegisters (allocateRegisters)
 import Lang.Eoc.Asm.PatchInstructions (patchInstructions)
 import Lang.Eoc.Asm.PreludeConclusion (preludeConclusion)
+import Lang.Eoc.Asm.RemoveJmp (removeJmp)

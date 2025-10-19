@@ -21,6 +21,7 @@ import Lang.Eoc.Asm
   , allocateRegisters
   , patchInstructions
   , preludeConclusion
+  , removeJmp
   )
 
 
@@ -180,6 +181,7 @@ specFun = describe "Function Tests" $ do
       :> ("allocateRegisters", allocateRegisters)
       :> ("patchInstructions", patchInstructions)
       :> ("preludeConclusion", preludeConclusion)
+      :> ("removeJmp", removeJmp)
     example = parseRfromString' """
     \&(define (double [x: Int]) : Int
     \&  (+ x x))

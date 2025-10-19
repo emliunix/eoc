@@ -45,6 +45,7 @@ library eoc
                     , Lang.Eoc.Asm.AllocateRegisters
                     , Lang.Eoc.Asm.PatchInstructions
                     , Lang.Eoc.Asm.PreludeConclusion
+                    , Lang.Eoc.Asm.RemoveJmp
                     , Lang.Eoc.Free
                     , Lang.Eoc.Types
     build-depends:    base

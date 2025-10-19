@@ -5,12 +5,13 @@ import Control.Exception (throw)
 import Lang.Eoc.Types
 import Lang.Eoc.Asm.Types
 
-mkPrelude :: Int -> [Reg] -> [Instr]
-mkPrelude stackSize usedSavedRegs =
+mkPrelude :: Int -> [Reg] -> String -> [Instr]
+mkPrelude stackSize usedSavedRegs startLbl =
   [ Iaddi (ArgReg SP) (ArgReg SP) (ArgImm (-stackSize))
   , Isd (ArgReg RA) (ArgMemRef (stackSize - 8) SP)
   , Isd (ArgReg S0) (ArgMemRef (stackSize - 16) SP)
   , Iaddi (ArgReg S0) (ArgReg SP) (ArgImm stackSize)
+  , Ibranch startLbl
   ] ++ zipWith mkSt usedSavedRegs [0..]
   where
     mkSt reg idx =
@@ -42,8 +43,9 @@ preludeConclusion (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse 
           Just rs -> rs
           Nothing -> throw $ MyException
             "Used saved registers missing when adding prelude and conclusion"
+        startLbl = aiStartLabel info
         conclLbl = aiConclusionLabel info
-        prelude = mkPrelude stackSize usedSavedRegs
+        prelude = mkPrelude stackSize usedSavedRegs startLbl
         conclusion = mkConclusion stackSize usedSavedRegs conclLbl
         instrs' = prelude ++ instrs ++ conclusion
       in return $ AsmDef info name instrs'
