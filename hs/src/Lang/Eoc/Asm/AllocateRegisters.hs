@@ -1,7 +1,5 @@
 module Lang.Eoc.Asm.AllocateRegisters where
 
-import Debug.Trace (trace)
-
 import Control.Arrow ((&&&))
 import Control.Exception (throw)
 
@@ -109,7 +107,6 @@ allocateRegisters (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse 
                   acc
         allColors = dSatur interferenceGraph initialColors movesGraph vars
         colors = Map.filterWithKey (\k _ -> isVar k) allColors
-        msg = "Register allocation for " ++ name ++ ": " ++ show colors ++ ", graph: " ++ show interferenceGraph ++ "\n"
         maxCol = foldl max 0 $ Map.elems colors
         usedSavedRegs =
           let nUsed = min sizeSaved (max 0 (maxCol - index1stSaved))
@@ -123,7 +120,7 @@ allocateRegisters (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse 
         -- in color index, all registers and slots
         color2Args = map ArgReg freeRegs ++ slots
         -- replace variables with assigned registers/slots
-        var2args = Map.map (color2Args !!) $ Map.filter (>= 0) (trace msg colors)
+        var2args = Map.map (color2Args !!) $ Map.filter (>= 0) colors
         instrs' = map (replaceVars var2args) instrs
         info' = info
           { aiStackSpace = Just stackSpace
