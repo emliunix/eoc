@@ -6,14 +6,16 @@ import Text.Trifecta (Result (..))
 import Lang.Eoc.Sexp
 import Lang.Eoc.Types (MyException(..), parsePrimOp, PrimOp(..))
 import Lang.Eoc.R.Types
+import Data.List (unsnoc)
 
 parseR :: [Sexp] -> RDefsExp
-parseR sexps = RDefsExpProgram Info defs' exp
+parseR sexps = RDefsExpProgram Info defs' exp'
   where
-    go [] _ = throw $ MyException "no expression found"
-    go [sexp] defs = (reverse defs, parseExp sexp)
-    go (x:xs) defs = go xs (parseDef x : defs)
-    (defs', exp) = go sexps []
+    (defs, exp) = case unsnoc sexps of
+      Just x -> x
+      Nothing -> throw $ MyException "no expression found"
+    defs' = map parseDef defs
+    exp' = parseExp exp
 
 parseDef :: Sexp -> Def
 parseDef (List [Symbol "define", List (Symbol name:args), Colon, retTy, body]) =
@@ -43,20 +45,33 @@ parseExp (Bool b) = Bool_ b
 parseExp Nil = Unit_
 parseExp (Symbol v) = Var v
 parseExp (String s) = throw $ MyException $ "string not supported: " ++ s
-parseExp (List [Symbol "let", List [List [Symbol v, e]], b]) =
-      --  List [Symbol "let", List [List [Symbol "x",Integer 10]], e]
-  Let v (parseExp e) (parseExp b)
-parseExp (List [Symbol "if", cond, thn, els]) =
-  If (parseExp cond) (parseExp thn) (parseExp els)
+parseExp (List (Symbol "let":xs)) =
+  case xs of
+    [List defs, b] -> foldr go (parseExp b) defs
+      where
+        go (List [Symbol v, e]) body = Let v (parseExp e) body
+        go sexp _ = throw $ MyException $ "cannot parse let binding: " ++ show sexp
+    _ -> throw $ MyException $ "invalid let expression: " ++ show xs
+parseExp (List (Symbol "if":xs)) =
+  case xs of
+    [cond, thn, els] -> If (parseExp cond) (parseExp thn) (parseExp els)
+    _ -> throw $ MyException $ "invalid if expression: " ++ show xs
 parseExp (List ((Symbol "begin"):exps)) =
-  let (exps', body) = splitAtLast exps
-  in Begin (map parseExp exps') (parseExp body)
-parseExp (List [Symbol "while", cond, body]) =
-  While (parseExp cond) (parseExp body)
-parseExp (List [Symbol "set!", Symbol v, e]) =
-  SetBang v (parseExp e)
-parseExp (List [Symbol "get!", Symbol v]) =
-  GetBang v
+  case unsnoc $ map parseExp exps of
+    Just (exps', body) -> Begin exps' body
+    Nothing -> throw $ MyException "begin must have at least one expression"
+parseExp (List t@(Symbol "while":xs)) =
+  case xs of
+    [cond, body] -> While (parseExp cond) (parseExp body)
+    _ -> throw $ MyException $ "invalid while expression: " ++ show t
+parseExp (List (Symbol "set!":xs)) =
+  case xs of
+    [Symbol v, e] -> SetBang v (parseExp e)
+    _ -> throw $ MyException $ "invalid set! expression: " ++ show xs
+parseExp (List (Symbol "get!":xs)) =
+  case xs of
+    [Symbol v] -> GetBang v
+    _ -> throw $ MyException $ "invalid get! expression: " ++ show xs
 parseExp (List (Symbol op:args))
   | op == "-" = case args of
       [e] -> Prim PrimNeg [parseExp e]
@@ -65,13 +80,6 @@ parseExp (List (Symbol op:args))
   | Just op' <- parsePrimOp op = Prim op' (map parseExp args)
   | otherwise = Apply (Var op) (map parseExp args)
 parseExp sexp = throw $ MyException $ "cannot parse expression: " ++ show sexp
-
-splitAtLast :: [a] -> ([a], a)
-splitAtLast [] = throw $ MyException "empty list"
-splitAtLast [x] = ([], x)
-splitAtLast (x:xs) =
-  let (xs', z) = splitAtLast xs
-  in (x:xs', z)
 
 parseRfromString :: String -> Result RDefsExp
 parseRfromString input = case parseSexpsFromString input of
