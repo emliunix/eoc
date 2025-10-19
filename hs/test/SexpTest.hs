@@ -31,7 +31,7 @@ testCases =
      \&   2)
      \&"""
   , "(nested (list (+ 1 2) \"string\" #f))"
-  , "(let ([a 10]) a)"
+  , "(let ([a 10] [b 12]) a)"
   ]
 expectedResults :: [Sexp]
 expectedResults =
@@ -49,7 +49,7 @@ expectedResults =
   , List [Symbol "cons", Integer 1, Nil]
   , List [Symbol "+", Integer 1, Integer 2]
   , List [Symbol "nested", List [Symbol "list", List [Symbol "+", Integer 1, Integer 2], String "string", Bool False]]
-  , List [Symbol "let", List [List [Symbol "a", Integer 10]], Symbol "a"]
+  , List [Symbol "let", List [List [Symbol "a", Integer 10], List [Symbol "b", Integer 12]], Symbol "a"]
   ]
 
 shouldBeSuccess :: (Show a, Eq a) => Result a -> a -> Expectation
@@ -62,9 +62,9 @@ testParse (input, expected) = do
 
 sexpTestSpec :: Spec
 sexpTestSpec = describe "S-expression Parser Tests" $ do
-  it "parses all test cases" $ do
+  it "parses all example sexps" $ do
     mapM_ testParse (zip testCases expectedResults)
-  it "parses to R" $ do
+  it "parses R" $ do
     let input = "(let ([x 10]) (if #t (+ x 1) (- x 1)))"
         result = parseRfromString input
         expectedR = RDefsExpProgram Info [] $
@@ -86,4 +86,22 @@ sexpTestSpec = describe "S-expression Parser Tests" $ do
             (Prim PrimPlus [Var "a", Var "b"])
           ]
           (Apply (Var "add") [Int_ 1, Int_ 2])
+    prog `shouldBeSuccess` expected
+  it "parses while" $ do
+    let input ="""
+           \&(let ([x 10])
+           \&  (begin
+           \&    (while (> x 0)
+           \&      (set! x (- x 1)))
+           \&    x))
+          """
+        prog = parseRfromString input
+        expected = RDefsExpProgram Info
+          []
+          (Let "x" (Int_ 10)
+            (Begin
+              [ While (Prim PrimGt [Var "x", Int_ 0])
+                  (SetBang "x" (Prim PrimSub [Var "x", Int_ 1]))
+              ]
+              (Var "x")))
     prog `shouldBeSuccess` expected

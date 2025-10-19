@@ -1,7 +1,11 @@
+{-# LANGUAGE OrPatterns #-}
 module Lang.Eoc.R.Typecheck where
 
 import Control.Monad.Except (Except, runExcept, throwError)
 import Control.Exception (throw)
+
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 import Lang.Eoc.Types
 import Lang.Eoc.R.Types
@@ -9,13 +13,22 @@ import Lang.Eoc.R.Types
 typeCheckPass :: RDefsExp -> PassM RDefsExp
 typeCheckPass defsExp = return $ typeCheck defsExp
 
+checkDup :: Env -> Env
+checkDup xs =
+  foldl go Set.empty (map fst xs) `seq` xs
+  where
+    go s n =
+      if Set.member n s
+      then throw $ MyException $ "Duplicate variable in environment: " ++ n
+      else Set.insert n s
+
 typeCheck :: RDefsExp -> RDefsExp
 typeCheck (RDefsExpProgram info defs exp) =
   let
     defTy (Def _ name args retTy _) = (name, TyFun (map snd args) retTy)
-    topEnv = map defTy defs
+    topEnv = checkDup $ map defTy defs
     tyckDef (Def info name args retTy body) =
-      let (body', bodyTy) = typeCheckExp (args ++ topEnv) body
+      let (body', bodyTy) = typeCheckExp (checkDup args ++ topEnv) body
       in throwExcept $ do
         check (bodyTy == retTy) $
           "Type mismatch in function " ++ name ++ ": expected " ++ show retTy ++
@@ -41,10 +54,7 @@ typeCheckExp :: Env -> Exp -> (Exp, Ty)
 typeCheckExp _   t@(Int_ _)  = (t, TyInt)
 typeCheckExp _   t@(Bool_ _) = (t, TyBool)
 typeCheckExp _   Unit_ = (Unit_, TyUnit)
-typeCheckExp env t@(Var var) =
-  case lookup var env of
-    Just ty -> (t, ty)
-    Nothing -> throw $ MyException $ var ++ " not found"
+typeCheckExp env t@(Var var) = (t, lookupEnv var env)
 typeCheckExp env (Let var exp body) =
   let (exp', ty) = typeCheckExp env exp
       env' = (var, ty) : env
@@ -62,7 +72,7 @@ typeCheckExp env (If cond thn els) =
   in throwExcept $ do
     check (condTy == TyBool) $ "Condition of if must be Bool, but got " ++ show condTy
     check (thnTy == elsTy) $ "Branches of if must have the same type," ++
-      " but got " ++ show thnTy ++ " and " ++ show elsTy
+      " but then has " ++ show thnTy ++ " while else has " ++ show elsTy
     return (If cond' thn' els', thnTy)
 typeCheckExp env (SetBang var exp) =
   let expTy = lookupEnv var env
@@ -71,9 +81,6 @@ typeCheckExp env (SetBang var exp) =
     check (expTy == expTy') $ "Type mismatch in set!, variable " ++ var ++
       " has type " ++ show expTy ++ ", but got " ++ show expTy'
     return (SetBang var exp', TyUnit)
-typeCheckExp env (GetBang var) =
-  let ty = lookupEnv var env
-  in (GetBang var, ty)
 typeCheckExp env (Begin exps body) =
   let (exps', _) = unzip $ map (typeCheckExp env) exps
       (body', bodyTy) = typeCheckExp env body
@@ -95,27 +102,28 @@ typeCheckExp env (Apply fun args) =
           show argsTy' ++ ", but got " ++ show argsTy
         return (Apply fun' args', retTy)
       _ -> throwError $ "Expected function type, but got " ++ show funTy
-typeCheckExp _ t@(FunRef _) = throw $ MyException $ "Unexpected internal FunRef: " ++ show t
+typeCheckExp _ t@(FunRef _; GetBang _) = throw $ MyException $ "Unexpected internal node: " ++ show t
 
 typeCheckPrimOp :: PrimOp -> [Ty] -> Ty
-typeCheckPrimOp PrimRead   [] = TyInt
-typeCheckPrimOp PrimNeg    [TyInt] = TyInt
-typeCheckPrimOp PrimPlus   [TyInt, TyInt] = TyInt
-typeCheckPrimOp PrimSub    [TyInt, TyInt] = TyInt
-typeCheckPrimOp PrimEq     [TyInt, TyInt] = TyBool
+typeCheckPrimOp PrimRead   [              ] = TyInt
+typeCheckPrimOp PrimNeg    [TyInt         ] = TyInt
+typeCheckPrimOp PrimPlus   [TyInt,  TyInt ] = TyInt
+typeCheckPrimOp PrimSub    [TyInt,  TyInt ] = TyInt
+typeCheckPrimOp PrimEq     [TyInt,  TyInt ] = TyBool
 typeCheckPrimOp PrimEq     [TyBool, TyBool] = TyBool
 typeCheckPrimOp PrimEq     [TyUnit, TyUnit] = TyBool
-typeCheckPrimOp PrimNe     [TyInt, TyInt] = TyBool
+typeCheckPrimOp PrimNe     [TyInt,  TyInt ] = TyBool
 typeCheckPrimOp PrimNe     [TyBool, TyBool] = TyBool
-typeCheckPrimOp PrimLt     [TyInt, TyInt] = TyBool
-typeCheckPrimOp PrimLe     [TyInt, TyInt] = TyBool
-typeCheckPrimOp PrimGt     [TyInt, TyInt] = TyBool
-typeCheckPrimOp PrimGe     [TyInt, TyInt] = TyBool
+typeCheckPrimOp PrimLt     [TyInt,  TyInt ] = TyBool
+typeCheckPrimOp PrimLe     [TyInt,  TyInt ] = TyBool
+typeCheckPrimOp PrimGt     [TyInt,  TyInt ] = TyBool
+typeCheckPrimOp PrimGe     [TyInt,  TyInt ] = TyBool
 typeCheckPrimOp PrimAnd    [TyBool, TyBool] = TyBool
 typeCheckPrimOp PrimOr     [TyBool, TyBool] = TyBool
-typeCheckPrimOp PrimNot    [TyBool] = TyBool
+typeCheckPrimOp PrimNot    [TyBool        ] = TyBool
 -- TODO: type check vector
-typeCheckPrimOp op         argTys = throw $ MyException $ "Type error in primitive operation: " ++ show op ++ " with args " ++ show argTys
+typeCheckPrimOp op         argTys           = throw $ MyException $
+  "Type error in primitive operation: " ++ show op ++ " with args " ++ show argTys
 
 throwExcept :: Except String a -> a
 throwExcept ex = case runExcept ex of
@@ -125,4 +133,3 @@ throwExcept ex = case runExcept ex of
 check :: Bool -> String -> Except String ()
 check True _ = return ()
 check False ~msg = throwError msg
-

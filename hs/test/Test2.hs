@@ -107,7 +107,7 @@ mySpec3 = describe "Test explicate-control" $ do
 
 mySpecRWhile :: Spec
 mySpecRWhile = describe "R_while" $ do
-  it "example compiles" $ do
+  it "compiles while example" $ do
     test example5 `shouldReturn` ()
   where
     passes = InitialPass ("shrink", shrink)
@@ -160,6 +160,8 @@ specFun = describe "Function Tests" $ do
   it "compiles functions" $ do
     test example
     test example2
+  it "compiles fib-while" $ do
+    test example3
   where
     test = compile passes
     passes = InitialPass ("typeCheckPass", typeCheckPass)
@@ -191,5 +193,19 @@ specFun = describe "Function Tests" $ do
     \&      (fib-go (- n 1) b (+ a b))
     \&      a))
     \&(define (fib [x: Int]) : Int (fib-go x 0 1))
+    \&(fib 10)
+    \&"""
+    example3 = parseRfromString' """
+    \&(define (fib [x: Int]) : Int
+    \&  (let ([a 0]
+    \&        [b 1])
+    \&    (begin
+    \&      (while (> x 0)
+    \&        (let ([temp a])
+    \&          (begin
+    \&            (set! x (- x 1))
+    \&            (set! a b)
+    \&            (set! b (+ temp b)))))
+    \&      a)))
     \&(fib 10)
     \&"""
