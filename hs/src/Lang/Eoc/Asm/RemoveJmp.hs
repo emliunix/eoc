@@ -11,5 +11,5 @@ removeJmp (AsmDefsProgram info defs) = AsmDefsProgram info <$> traverse goDef de
     go [] = []
     go (Ilabel lbl i:is) = labelBlock lbl $ go (i:is)
     go (Ibranch lbl:cont@(i:_))
-      | Just lbls <- labels i, lbl `elem` lbls = go cont  -- Remove redundant branch
+      | Just lbls <- labels i, lbl `elem` lbls = go cont  -- Remove fallthrough branching
     go (i:is) = i : go is
